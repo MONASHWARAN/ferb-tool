@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ADB Log Interaction Tool</title>
+    <title>FERB - the adb interaction tool</title>
     <style>
         * {
             margin: 0;
@@ -416,7 +416,7 @@
 </head>
 <body>
     <div class="header">
-        <h1>🔧 ADB Log Interaction Tool</h1>
+        <h1>🔧 FERB - the adb interaction tool</h1>
         <p>FOS, VEGA & Puffin Support</p>
     </div>
 
@@ -948,8 +948,11 @@
             
             socket.on('connect', function() {
                 console.log('Connected to server');
-                refreshDevices();
-                startDeviceMonitoring();
+                // Wait for DOM to be ready before starting monitoring
+                setTimeout(() => {
+                    refreshDevices();
+                    startDeviceMonitoring();
+                }, 100);
             });
 
             socket.on('devices', function(data) {
@@ -994,10 +997,30 @@
             });
         }
         
-        // Initialize when page loads
-        window.onload = function() {
-            initSocket();
-        };
+        // Initialize when page loads - ensure DOM is fully loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            // Double check all required elements exist
+            const requiredElements = [
+                'deviceInfo', 'deviceStatus', 'deviceDropdownContainer', 'deviceSelect'
+            ];
+            
+            let allElementsExist = true;
+            for (const elementId of requiredElements) {
+                if (!document.getElementById(elementId)) {
+                    console.error(`Required element missing: ${elementId}`);
+                    allElementsExist = false;
+                }
+            }
+            
+            if (allElementsExist) {
+                initSocket();
+            } else {
+                console.error('Not all required DOM elements found, retrying in 1 second');
+                setTimeout(() => {
+                    initSocket();
+                }, 1000);
+            }
+        });
         
         // Cleanup on page unload
         window.onbeforeunload = function() {

@@ -581,7 +581,7 @@ if __name__ == '__main__':
         print(f"❌ Error checking ADB: {e}")
         sys.exit(1)
     
-    print("🚀 Starting ADB Log Tool Web Interface...")
+    print("🚀 Starting FERB - the adb interaction tool Web Interface...")
     print("🌐 Access the tool at: http://localhost:5000")
     
     # Run the Flask-SocketIO app
