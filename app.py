@@ -10,6 +10,7 @@ import subprocess
 import threading
 import time
 import re
+import socket
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, asdict
 from flask import Flask, render_template, jsonify
@@ -560,6 +561,17 @@ def handle_grep_match(data):
     print(f"Grep match found for pattern {pattern_id}: {pattern}")
 
 
+def find_available_port(start_port=5000, max_port=5100):
+    """Find an available port starting from start_port"""
+    for port in range(start_port, max_port):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind(('', port))
+                return port
+        except OSError:
+            continue
+    raise RuntimeError(f"No available ports found between {start_port} and {max_port}")
+
 def signal_handler(sig, frame):
     """Handle Ctrl+C gracefully"""
     print("\nShutting down ADB Log Tool...")
@@ -583,8 +595,16 @@ if __name__ == '__main__':
         print(f"❌ Error checking ADB: {e}")
         sys.exit(1)
     
-    print("🚀 Starting FERB - the adb interaction tool Web Interface...")
-    print("🌐 Access the tool at: http://localhost:5000")
-    
-    # Always use port 5000 for consistency
-    socketio.run(app, host='0.0.0.0', port=5000, debug=False, use_reloader=False)
+    # Find an available port automatically
+    try:
+        port = find_available_port()
+        print("🚀 Starting FERB - the adb interaction tool Web Interface...")
+        print(f"🌐 Access the tool at: http://localhost:{port}")
+        
+        # Run the Flask-SocketIO app on the discovered port
+        socketio.run(app, host='0.0.0.0', port=port, debug=False, use_reloader=False)
+        
+    except RuntimeError as e:
+        print(f"❌ Error finding available port: {e}")
+        print("Please check if other applications are using ports 5000-5100")
+        sys.exit(1)
