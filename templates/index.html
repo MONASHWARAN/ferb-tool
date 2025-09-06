@@ -695,8 +695,10 @@
                 deviceSelect.value = JSON.stringify(devices[0]);
                 selectDevice();
             } else if (devices.length > 1) {
-                // Multiple devices available - enable buttons but require selection
-                enableDeviceActions();
+                // Multiple devices available - automatically select the first one
+                deviceSelect.value = JSON.stringify(devices[0]);
+                selectDevice();
+                console.log('🔄 Auto-selected first device from multiple options');
             } else {
                 disableDeviceActions();
             }
@@ -1016,10 +1018,6 @@
                     refreshDevices();
                     startDeviceMonitoring();
                 }, 100);
-            });
-
-            socket.on('devices', function(data) {
-                updateDeviceList(data.devices);
             });
 
             socket.on('log_line', function(data) {
