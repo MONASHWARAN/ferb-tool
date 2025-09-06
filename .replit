@@ -4,7 +4,7 @@ expertMode = true
 
 [nix]
 channel = "stable-25_05"
-packages = ["mesa", "libGL", "xorg.libX11", "xorg.libXext", "xorg.libXrender", "libxkbcommon", "fontconfig", "freetype", "dbus", "zstd", "xorg.libxcb", "xorg.xcbutilcursor", "android-tools"]
+packages = ["android-tools", "dbus", "fontconfig", "freetype", "iana-etc", "libGL", "libxkbcommon", "mesa", "xorg.libX11", "xorg.libXext", "xorg.libXrender", "xorg.libxcb", "xorg.xcbutilcursor", "zstd"]
 
 [workflows]
 runButton = "Project"
