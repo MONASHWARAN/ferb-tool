@@ -1052,43 +1052,93 @@
             });
         }
         
-        // Initialize immediately after DOM is ready - simplified approach
+        // Guaranteed DOM initialization with extensive checking
         function initializeApp() {
-            console.log('Initializing FERB ADB Tool...');
+            console.log('🚀 Starting FERB ADB Tool initialization...');
+            
+            // Check if critical DOM elements exist before proceeding
+            const requiredElements = [
+                'deviceInfo', 'deviceStatus', 'deviceDropdownContainer', 'deviceSelect',
+                'startBtn', 'fosBtn', 'vegaBtn', 'puffinBtn'
+            ];
+            
+            let allElementsFound = true;
+            const missingElements = [];
+            
+            for (const elementId of requiredElements) {
+                const element = document.getElementById(elementId);
+                if (!element) {
+                    allElementsFound = false;
+                    missingElements.push(elementId);
+                }
+            }
+            
+            if (!allElementsFound) {
+                console.warn(`❌ Missing DOM elements: ${missingElements.join(', ')}`);
+                console.log('⏳ Retrying in 100ms...');
+                setTimeout(initializeApp, 100);
+                return;
+            }
+            
+            console.log('✅ All required DOM elements found!');
+            
             try {
                 initSocket();
-                console.log('Socket initialized successfully');
+                console.log('✅ Socket initialized successfully');
+                
+                // Initialize button states
+                disableDeviceActions();
+                console.log('✅ Initial button states set');
+                
             } catch (error) {
-                console.error('Error initializing socket:', error);
-                // Retry once after a delay
+                console.error('❌ Error initializing socket:', error);
                 setTimeout(() => {
                     try {
                         initSocket();
-                        console.log('Socket initialized on retry');
+                        disableDeviceActions();
+                        console.log('✅ Socket initialized on retry');
                     } catch (retryError) {
-                        console.error('Failed to initialize socket on retry:', retryError);
+                        console.error('❌ Failed to initialize socket on retry:', retryError);
                     }
                 }, 1000);
             }
         }
         
-        // Use multiple DOM ready strategies for maximum compatibility
-        if (document.readyState === 'complete') {
-            // DOM is already fully loaded
+        // Multi-strategy DOM ready detection with guaranteed execution
+        let initializationStarted = false;
+        
+        function safeInitialize() {
+            if (initializationStarted) return;
+            initializationStarted = true;
+            
+            // Wait for document body to exist
+            if (!document.body) {
+                setTimeout(safeInitialize, 50);
+                return;
+            }
+            
             initializeApp();
-        } else if (document.readyState === 'interactive') {
-            // DOM is loaded but resources might still be loading
-            initializeApp();
-        } else {
-            // DOM is still loading
-            document.addEventListener('DOMContentLoaded', initializeApp);
         }
         
-        // Fallback initialization
+        // Strategy 1: If DOM is already complete
+        if (document.readyState === 'complete') {
+            safeInitialize();
+        }
+        // Strategy 2: If DOM content is loaded
+        else if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', safeInitialize);
+        }
+        // Strategy 3: If interactive but not complete
+        else {
+            safeInitialize();
+        }
+        
+        // Strategy 4: Ultimate fallback after window load
         window.addEventListener('load', function() {
             if (!socket || !socket.connected) {
-                console.log('Fallback initialization triggered');
-                initializeApp();
+                console.log('🔄 Fallback initialization triggered');
+                initializationStarted = false;
+                safeInitialize();
             }
         });
         
