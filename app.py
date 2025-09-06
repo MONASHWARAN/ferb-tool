@@ -595,16 +595,10 @@ if __name__ == '__main__':
         print(f"❌ Error checking ADB: {e}")
         sys.exit(1)
     
-    # Find an available port automatically
-    try:
-        port = find_available_port()
-        print("🚀 Starting FERB - the adb interaction tool Web Interface...")
-        print(f"🌐 Access the tool at: http://localhost:{port}")
-        
-        # Run the Flask-SocketIO app on the discovered port
-        socketio.run(app, host='0.0.0.0', port=port, debug=False, use_reloader=False)
-        
-    except RuntimeError as e:
-        print(f"❌ Error finding available port: {e}")
-        print("Please check if other applications are using ports 5000-5100")
-        sys.exit(1)
+    # Use port 5000 (required for Replit webview)
+    port = 5000
+    print("🚀 Starting FERB - the adb interaction tool Web Interface...")
+    print(f"🌐 Access the tool at: http://localhost:{port}")
+    
+    # Run the Flask-SocketIO app on port 5000
+    socketio.run(app, host='0.0.0.0', port=port, debug=False, use_reloader=False)
