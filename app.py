@@ -104,7 +104,7 @@ class ADBManager:
             return 'Unknown'
 
     def start_logging(self, device: dict, filename: Optional[str] = None, grep_patterns: Dict[int, str] = None):
-        """Start ADB logging"""
+        """Start ADB logging with trial-and-error approach"""
         if self.logging_active:
             self.socketio.emit('error', {'message': 'Logging is already active'})
             return False
@@ -113,21 +113,25 @@ class ADBManager:
         self.grep_patterns = grep_patterns or {}
         
         try:
-            # Determine the correct ADB command based on OS type
-            if self.current_device.os_type.lower() == 'vega':
-                cmd = ['adb', '-s', self.current_device.device_id, 'shell', 'journalctl', '-f']
-            else:  # FOS & Puffin
-                cmd = ['adb', '-s', self.current_device.device_id, 'logcat']
-            
             # Open log file if filename provided
             if filename:
-                self.log_file_handle = open(filename, 'w')
+                try:
+                    self.log_file_handle = open(filename, 'w')
+                except Exception as e:
+                    self.socketio.emit('error', {'message': f'Cannot create log file "{filename}": {str(e)}'})
+                    return False
             
-            # Start the logging process
-            self.log_process = subprocess.Popen(
-                cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, 
-                text=True, bufsize=1
-            )
+            # Try different logging commands in order of preference
+            success = self._try_logging_methods()
+            
+            if not success:
+                if self.log_file_handle:
+                    self.log_file_handle.close()
+                    self.log_file_handle = None
+                self.socketio.emit('error', {
+                    'message': f'Failed to start logging for {self.current_device.device_id}. Device may not support standard logging commands or is disconnected.'
+                })
+                return False
             
             self.logging_active = True
             self.log_buffer = []
@@ -135,53 +139,161 @@ class ADBManager:
             # Start log processing in a separate thread
             threading.Thread(target=self._process_logs, daemon=True).start()
             
-            self.socketio.emit('logging_status', {
-                'status': 'started',
-                'message': f'Logging started for {self.current_device.device_id} ({self.current_device.os_type})'
-            })
-            
             return True
             
         except Exception as e:
+            if self.log_file_handle:
+                try:
+                    self.log_file_handle.close()
+                except:
+                    pass
+                self.log_file_handle = None
             self.socketio.emit('error', {'message': f'Error starting log capture: {str(e)}'})
             return False
+            
+    def _try_logging_methods(self) -> bool:
+        """Try different logging methods in order: FOS -> VEGA -> Generic"""
+        methods = [
+            {
+                'name': 'FOS/Puffin logcat',
+                'cmd': ['adb', '-s', self.current_device.device_id, 'logcat'],
+                'test_cmd': ['adb', '-s', self.current_device.device_id, 'shell', 'logcat', '-d', '-t', '1']
+            },
+            {
+                'name': 'VEGA journalctl',
+                'cmd': ['adb', '-s', self.current_device.device_id, 'shell', 'journalctl', '-f'],
+                'test_cmd': ['adb', '-s', self.current_device.device_id, 'shell', 'journalctl', '--version']
+            }
+        ]
+        
+        for method in methods:
+            try:
+                self.socketio.emit('logging_status', {
+                    'status': 'trying',
+                    'message': f'Trying {method["name"]} for {self.current_device.device_id}...'
+                })
+                
+                # Test if the command is available
+                test_result = subprocess.run(
+                    method['test_cmd'], 
+                    capture_output=True, 
+                    text=True, 
+                    timeout=5
+                )
+                
+                if test_result.returncode == 0 or 'journalctl' in method['name']:
+                    # Try to start the actual logging process
+                    self.log_process = subprocess.Popen(
+                        method['cmd'], 
+                        stdout=subprocess.PIPE, 
+                        stderr=subprocess.PIPE, 
+                        text=True, 
+                        bufsize=1
+                    )
+                    
+                    # Wait a moment to see if process starts successfully
+                    time.sleep(0.5)
+                    
+                    if self.log_process.poll() is None:  # Process is still running
+                        self.socketio.emit('logging_status', {
+                            'status': 'started',
+                            'message': f'Logging started using {method["name"]} for {self.current_device.device_id}'
+                        })
+                        return True
+                    else:
+                        # Process failed, try next method
+                        continue
+                        
+            except subprocess.TimeoutExpired:
+                self.socketio.emit('logging_status', {
+                    'status': 'timeout',
+                    'message': f'{method["name"]} timed out, trying next method...'
+                })
+                continue
+            except Exception as e:
+                self.socketio.emit('logging_status', {
+                    'status': 'error',
+                    'message': f'{method["name"]} failed: {str(e)}, trying next method...'
+                })
+                continue
+        
+        return False
 
     def _process_logs(self):
-        """Process logs in background thread"""
+        """Process logs in background thread with enhanced error handling"""
         try:
+            consecutive_errors = 0
+            max_consecutive_errors = 5
+            
             while self.logging_active and self.log_process and self.log_process.poll() is None:
-                if self.log_process.stdout:
-                    line = self.log_process.stdout.readline()
-                    if line:
-                        line = line.strip()
-                        
-                        # Add to buffer
-                        self.log_buffer.append(line)
-                        
-                        # Save to file if specified
-                        if self.log_file_handle:
-                            try:
-                                self.log_file_handle.write(line + '\n')
-                                self.log_file_handle.flush()
-                            except Exception as e:
-                                print(f"Error writing to file: {e}")
-                        
-                        # Send to frontend
-                        timestamp = time.strftime("%H:%M:%S")
-                        self.socketio.emit('log_line', {
-                            'line': line,
-                            'timestamp': timestamp
-                        })
-                        
-                        # Check grep patterns
-                        self._check_grep_patterns(line, timestamp)
-                        
-                        # Limit buffer size
-                        if len(self.log_buffer) > 10000:
-                            self.log_buffer = self.log_buffer[-5000:]
+                try:
+                    if self.log_process.stdout:
+                        line = self.log_process.stdout.readline()
+                        if line:
+                            line = line.strip()
                             
+                            # Reset error counter on successful read
+                            consecutive_errors = 0
+                            
+                            # Add to buffer
+                            self.log_buffer.append(line)
+                            
+                            # Save to file if specified
+                            if self.log_file_handle:
+                                try:
+                                    self.log_file_handle.write(line + '\n')
+                                    self.log_file_handle.flush()
+                                except Exception as e:
+                                    self.socketio.emit('error', {
+                                        'message': f'Error writing to log file: {str(e)}'
+                                    })
+                            
+                            # Send to frontend
+                            timestamp = time.strftime("%H:%M:%S")
+                            self.socketio.emit('log_line', {
+                                'line': line,
+                                'timestamp': timestamp
+                            })
+                            
+                            # Check grep patterns
+                            self._check_grep_patterns(line, timestamp)
+                            
+                            # Limit buffer size
+                            if len(self.log_buffer) > 10000:
+                                self.log_buffer = self.log_buffer[-5000:]
+                        else:
+                            # No data, short sleep to prevent busy waiting
+                            time.sleep(0.01)
+                            
+                except Exception as e:
+                    consecutive_errors += 1
+                    if consecutive_errors >= max_consecutive_errors:
+                        self.socketio.emit('error', {
+                            'message': f'Too many consecutive errors reading logs: {str(e)}. Stopping log capture.'
+                        })
+                        break
+                    else:
+                        print(f"Log processing error ({consecutive_errors}/{max_consecutive_errors}): {e}")
+                        time.sleep(0.1)
+                        
+            # Check if process ended unexpectedly
+            if self.log_process and self.log_process.poll() is not None and self.logging_active:
+                return_code = self.log_process.returncode
+                stderr_output = ""
+                try:
+                    if self.log_process.stderr:
+                        stderr_output = self.log_process.stderr.read()
+                except:
+                    pass
+                    
+                self.socketio.emit('error', {
+                    'message': f'Log process ended unexpectedly (exit code: {return_code}). {stderr_output}'
+                })
+                self.logging_active = False
+                
         except Exception as e:
-            self.socketio.emit('error', {'message': f'Error processing logs: {str(e)}'})
+            self.socketio.emit('error', {'message': f'Critical error in log processing: {str(e)}'})
+            self.logging_active = False
 
     def _check_grep_patterns(self, line: str, timestamp: str):
         """Check if line matches any grep patterns"""

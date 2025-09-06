@@ -304,6 +304,97 @@
             padding: 20px;
         }
 
+        .error-banner {
+            background-color: #f44336;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+            position: relative;
+        }
+
+        .error-banner.show {
+            display: block;
+            animation: slideDown 0.3s ease;
+        }
+
+        .error-close {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            cursor: pointer;
+            font-size: 18px;
+        }
+
+        .warning-banner {
+            background-color: #ff9800;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .warning-banner.show {
+            display: block;
+            animation: slideDown 0.3s ease;
+        }
+
+        .success-banner {
+            background-color: #4caf50;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .success-banner.show {
+            display: block;
+            animation: slideDown 0.3s ease;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .device-dropdown-section {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: #4caf50;
+        }
+
+        .status-dot.disconnected {
+            background-color: #f44336;
+        }
+
+        .status-dot.warning {
+            background-color: #ff9800;
+        }
+
         @media (max-width: 768px) {
             .device-section {
                 grid-template-columns: 1fr;
@@ -330,22 +421,40 @@
     </div>
 
     <div class="container">
+        <!-- Error/Warning Banners -->
+        <div id="errorBanner" class="error-banner">
+            <span id="errorMessage"></span>
+            <span class="error-close" onclick="hideErrorBanner()">&times;</span>
+        </div>
+        <div id="warningBanner" class="warning-banner">
+            <span id="warningMessage"></span>
+        </div>
+        <div id="successBanner" class="success-banner">
+            <span id="successMessage"></span>
+        </div>
         <!-- Device Section -->
         <div class="section">
             <div class="section-title">
                 📱 Connected Devices
             </div>
-            <div class="device-section">
+            <div id="deviceSection" class="device-section">
                 <div id="deviceInfo" class="device-info">
                     <div id="deviceName">No devices connected</div>
-                    <div id="deviceStatus" class="device-status">Click refresh to detect devices</div>
+                    <div id="deviceStatus" class="device-status">
+                        <div class="connection-status">
+                            <span class="status-dot disconnected"></span>
+                            Click refresh to detect devices
+                        </div>
+                    </div>
                 </div>
                 <button id="refreshBtn" class="btn refresh-btn" onclick="refreshDevices()">
                     🔄 Refresh
                 </button>
-                <select id="deviceSelect" class="input-field" onchange="selectDevice()" style="display: none;">
-                    <option value="">Select Device</option>
-                </select>
+                <div id="deviceDropdownContainer" style="display: none;">
+                    <select id="deviceSelect" class="input-field" onchange="selectDevice()">
+                        <option value="">Select Device</option>
+                    </select>
+                </div>
             </div>
         </div>
 
@@ -472,11 +581,28 @@
 
             socket.on('error', function(data) {
                 console.error('Server error:', data.message);
-                alert('Error: ' + data.message);
+                showError(data.message);
+            });
+
+            socket.on('connect_error', function(error) {
+                console.error('Connection error:', error);
+                showError('Failed to connect to server. Please refresh the page.');
+            });
+
+            socket.on('disconnect', function(reason) {
+                console.log('Disconnected:', reason);
+                if (reason === 'io server disconnect') {
+                    showWarning('Connection lost. Attempting to reconnect...');
+                }
             });
         }
 
         function refreshDevices() {
+            if (!socket || !socket.connected) {
+                showError('Not connected to server. Please refresh the page.');
+                return;
+            }
+
             const btn = document.getElementById('refreshBtn');
             const originalText = btn.innerHTML;
             btn.innerHTML = '<div class="loading"></div> Detecting...';
@@ -487,44 +613,49 @@
             setTimeout(() => {
                 btn.innerHTML = originalText;
                 btn.disabled = false;
-            }, 2000);
+            }, 3000);
         }
 
         function updateDeviceList(devices) {
             const deviceInfo = document.getElementById('deviceInfo');
             const deviceStatus = document.getElementById('deviceStatus');
+            const deviceDropdownContainer = document.getElementById('deviceDropdownContainer');
             const deviceSelect = document.getElementById('deviceSelect');
             
             if (devices.length === 0) {
                 deviceInfo.innerHTML = '<div class="no-devices">No devices connected</div>';
-                deviceStatus.textContent = 'Connect an ADB device and click refresh';
-                deviceSelect.style.display = 'none';
+                deviceStatus.innerHTML = `
+                    <div class="connection-status">
+                        <span class="status-dot disconnected"></span>
+                        Connect an ADB device and click refresh
+                    </div>`;
+                deviceDropdownContainer.style.display = 'none';
                 disableDeviceActions();
                 return;
             }
 
+            // Always show dropdown when devices are available
+            deviceSelect.innerHTML = '<option value="">Select Device</option>';
+            devices.forEach(device => {
+                const option = document.createElement('option');
+                option.value = JSON.stringify(device);
+                option.textContent = `${device.device_id} (${device.os_type}) - ${device.status}`;
+                deviceSelect.appendChild(option);
+            });
+            
+            deviceDropdownContainer.style.display = 'block';
+            deviceInfo.innerHTML = `<div><strong>${devices.length} device(s) detected</strong></div>`;
+            deviceStatus.innerHTML = `
+                <div class="connection-status">
+                    <span class="status-dot"></span>
+                    Please select a device from the dropdown
+                </div>`;
+            
+            // Auto-select if only one device
             if (devices.length === 1) {
-                // Auto-select single device
-                currentDevice = devices[0];
-                deviceInfo.innerHTML = `
-                    <div><strong>${devices[0].device_id}</strong></div>
-                    <div>OS Type: <span style="color: #64b5f6">${devices[0].os_type}</span></div>
-                `;
-                deviceStatus.textContent = `Status: ${devices[0].status}`;
-                deviceSelect.style.display = 'none';
-                enableDeviceActions();
+                deviceSelect.value = JSON.stringify(devices[0]);
+                selectDevice();
             } else {
-                // Show device selector
-                deviceSelect.innerHTML = '<option value="">Select Device</option>';
-                devices.forEach(device => {
-                    const option = document.createElement('option');
-                    option.value = JSON.stringify(device);
-                    option.textContent = `${device.device_id} (${device.os_type}) - ${device.status}`;
-                    deviceSelect.appendChild(option);
-                });
-                deviceSelect.style.display = 'block';
-                deviceInfo.innerHTML = `<div>${devices.length} devices found - please select one</div>`;
-                deviceStatus.textContent = 'Multiple devices available';
                 disableDeviceActions();
             }
         }
@@ -535,15 +666,32 @@
             const deviceStatus = document.getElementById('deviceStatus');
             
             if (deviceSelect.value) {
-                currentDevice = JSON.parse(deviceSelect.value);
-                deviceInfo.innerHTML = `
-                    <div><strong>${currentDevice.device_id}</strong></div>
-                    <div>OS Type: <span style="color: #64b5f6">${currentDevice.os_type}</span></div>
-                `;
-                deviceStatus.textContent = `Status: ${currentDevice.status}`;
-                enableDeviceActions();
+                try {
+                    currentDevice = JSON.parse(deviceSelect.value);
+                    deviceInfo.innerHTML = `
+                        <div><strong>${currentDevice.device_id}</strong></div>
+                        <div>OS Type: <span style="color: #64b5f6">${currentDevice.os_type}</span></div>
+                    `;
+                    deviceStatus.innerHTML = `
+                        <div class="connection-status">
+                            <span class="status-dot ${currentDevice.status === 'device' ? '' : 'warning'}"></span>
+                            Status: ${currentDevice.status}
+                        </div>`;
+                    enableDeviceActions();
+                    hideErrorBanner();
+                } catch (error) {
+                    showError('Failed to parse device information');
+                    currentDevice = null;
+                    disableDeviceActions();
+                }
             } else {
                 currentDevice = null;
+                deviceInfo.innerHTML = '<div><strong>No device selected</strong></div>';
+                deviceStatus.innerHTML = `
+                    <div class="connection-status">
+                        <span class="status-dot disconnected"></span>
+                        Please select a device
+                    </div>`;
                 disableDeviceActions();
             }
         }
@@ -565,11 +713,22 @@
 
         function startLogging() {
             if (!currentDevice) {
-                alert('Please select a device first');
+                showError('Please select a device first');
+                return;
+            }
+
+            if (!socket || !socket.connected) {
+                showError('Not connected to server. Please refresh the page.');
                 return;
             }
 
             const filename = document.getElementById('logFilename').value.trim() || null;
+            
+            // Validate filename if provided
+            if (filename && !/^[\w\-. ]+$/.test(filename)) {
+                showError('Invalid filename. Use only letters, numbers, spaces, dots, and hyphens.');
+                return;
+            }
             
             socket.emit('start_logging', {
                 device: currentDevice,
@@ -583,6 +742,7 @@
             
             // Clear previous logs
             clearLogs();
+            showSuccess('Starting log capture...');
         }
 
         function stopLogging() {
@@ -679,7 +839,12 @@
 
         function extractCHR(osType) {
             if (!currentDevice) {
-                alert('Please select a device first');
+                showError('Please select a device first');
+                return;
+            }
+
+            if (!socket || !socket.connected) {
+                showError('Not connected to server. Please refresh the page.');
                 return;
             }
 
@@ -706,6 +871,44 @@
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        }
+
+        // Error handling functions
+        function showError(message) {
+            const errorBanner = document.getElementById('errorBanner');
+            const errorMessage = document.getElementById('errorMessage');
+            errorMessage.textContent = message;
+            errorBanner.classList.add('show');
+            
+            // Auto-hide after 10 seconds
+            setTimeout(hideErrorBanner, 10000);
+        }
+
+        function hideErrorBanner() {
+            const errorBanner = document.getElementById('errorBanner');
+            errorBanner.classList.remove('show');
+        }
+
+        function showWarning(message) {
+            const warningBanner = document.getElementById('warningBanner');
+            const warningMessage = document.getElementById('warningMessage');
+            warningMessage.textContent = message;
+            warningBanner.classList.add('show');
+            
+            setTimeout(() => {
+                warningBanner.classList.remove('show');
+            }, 5000);
+        }
+
+        function showSuccess(message) {
+            const successBanner = document.getElementById('successBanner');
+            const successMessage = document.getElementById('successMessage');
+            successMessage.textContent = message;
+            successBanner.classList.add('show');
+            
+            setTimeout(() => {
+                successBanner.classList.remove('show');
+            }, 5000);
         }
 
         // Initialize when page loads
