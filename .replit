@@ -7,3 +7,29 @@ channel = "stable-25_05"
 packages = ["android-tools", "dbus", "fontconfig", "freetype", "iana-etc", "libGL", "libxkbcommon", "mesa", "xorg.libX11", "xorg.libXext", "xorg.libXrender", "xorg.libxcb", "xorg.xcbutilcursor", "zstd"]
 
 [workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "ADB Web Tool"
+
+[[workflows.workflow]]
+name = "ADB Web Tool"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python app.py"
+waitForPort = 5000
+
+[workflows.workflow.metadata]
+outputType = "webview"
+
+[[ports]]
+localPort = 5000
+externalPort = 80
