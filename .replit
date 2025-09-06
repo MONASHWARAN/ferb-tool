@@ -16,15 +16,15 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "ADB Log Tool"
+args = "ADB Log CLI"
 
 [[workflows.workflow]]
-name = "ADB Log Tool"
+name = "ADB Log CLI"
 author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "python adb_log_tool.py"
+args = "python adb_log_cli.py"
 
 [workflows.workflow.metadata]
-outputType = "vnc"
+outputType = "console"
