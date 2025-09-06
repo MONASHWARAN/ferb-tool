@@ -1005,45 +1005,45 @@
             });
         }
         
-        // Initialize when page loads - more robust DOM waiting
-        function waitForDOM(retryCount = 0) {
-            const requiredElements = [
-                'deviceInfo', 'deviceStatus', 'deviceDropdownContainer', 'deviceSelect'
-            ];
-            
-            let allElementsExist = true;
-            for (const elementId of requiredElements) {
-                if (!document.getElementById(elementId)) {
-                    console.warn(`Required element missing: ${elementId} (attempt ${retryCount + 1})`);
-                    allElementsExist = false;
-                }
-            }
-            
-            if (allElementsExist) {
-                console.log('All DOM elements found, initializing socket...');
+        // Initialize immediately after DOM is ready - simplified approach
+        function initializeApp() {
+            console.log('Initializing FERB ADB Tool...');
+            try {
                 initSocket();
-                return;
-            }
-            
-            // Retry up to 50 times (5 seconds total)
-            if (retryCount < 50) {
-                setTimeout(() => waitForDOM(retryCount + 1), 100);
-            } else {
-                console.error('Failed to find required DOM elements after 50 attempts');
-                // Try to initialize anyway
-                initSocket();
+                console.log('Socket initialized successfully');
+            } catch (error) {
+                console.error('Error initializing socket:', error);
+                // Retry once after a delay
+                setTimeout(() => {
+                    try {
+                        initSocket();
+                        console.log('Socket initialized on retry');
+                    } catch (retryError) {
+                        console.error('Failed to initialize socket on retry:', retryError);
+                    }
+                }, 1000);
             }
         }
         
-        // Multiple initialization strategies
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', function() {
-                setTimeout(waitForDOM, 100);
-            });
+        // Use multiple DOM ready strategies for maximum compatibility
+        if (document.readyState === 'complete') {
+            // DOM is already fully loaded
+            initializeApp();
+        } else if (document.readyState === 'interactive') {
+            // DOM is loaded but resources might still be loading
+            initializeApp();
         } else {
-            // DOM already loaded
-            setTimeout(waitForDOM, 100);
+            // DOM is still loading
+            document.addEventListener('DOMContentLoaded', initializeApp);
         }
+        
+        // Fallback initialization
+        window.addEventListener('load', function() {
+            if (!socket || !socket.connected) {
+                console.log('Fallback initialization triggered');
+                initializeApp();
+            }
+        });
         
         // Cleanup on page unload
         window.onbeforeunload = function() {
