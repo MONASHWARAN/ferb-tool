@@ -694,6 +694,9 @@
             if (devices.length === 1) {
                 deviceSelect.value = JSON.stringify(devices[0]);
                 selectDevice();
+            } else if (devices.length > 1) {
+                // Multiple devices available - enable buttons but require selection
+                enableDeviceActions();
             } else {
                 disableDeviceActions();
             }
@@ -771,11 +774,16 @@
         }
 
         function disableDeviceActions() {
-            document.getElementById('startBtn').disabled = true;
-            document.getElementById('stopBtn').disabled = true;
-            document.getElementById('fosBtn').disabled = true;
-            document.getElementById('vegaBtn').disabled = true;
-            document.getElementById('puffinBtn').disabled = true;
+            const buttons = ['startBtn', 'stopBtn', 'fosBtn', 'vegaBtn', 'puffinBtn'];
+            buttons.forEach(btnId => {
+                const btn = document.getElementById(btnId);
+                if (btn) {
+                    btn.disabled = true;
+                    console.log(`🔒 Disabled button: ${btnId}`);
+                } else {
+                    console.warn(`❌ Button not found when disabling: ${btnId}`);
+                }
+            });
         }
 
         function startLogging() {
