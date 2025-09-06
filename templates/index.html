@@ -1006,8 +1006,7 @@
         }
         
         // Initialize when page loads - ensure DOM is fully loaded
-        document.addEventListener('DOMContentLoaded', function() {
-            // Double check all required elements exist
+        function waitForDOM() {
             const requiredElements = [
                 'deviceInfo', 'deviceStatus', 'deviceDropdownContainer', 'deviceSelect'
             ];
@@ -1022,12 +1021,15 @@
             
             if (allElementsExist) {
                 initSocket();
-            } else {
-                console.error('Not all required DOM elements found, retrying in 1 second');
-                setTimeout(() => {
-                    initSocket();
-                }, 1000);
+                return;
             }
+            
+            // Retry after a short delay if elements not found
+            setTimeout(waitForDOM, 100);
+        }
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            waitForDOM();
         });
         
         // Cleanup on page unload
