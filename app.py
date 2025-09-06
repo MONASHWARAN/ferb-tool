@@ -37,71 +37,147 @@ class ADBManager:
         self.grep_patterns: Dict[int, str] = {}
         
     def detect_devices(self) -> List[DeviceInfo]:
-        """Detect connected ADB devices and identify their OS types"""
+        """Robust ADB device detection with connection validation"""
+        devices = []
         try:
-            result = subprocess.run(['adb', 'devices'], capture_output=True, text=True, timeout=10)
+            # First, try to start ADB server if not running
+            try:
+                subprocess.run(['adb', 'start-server'], capture_output=True, timeout=5)
+            except:
+                pass  # Continue even if start-server fails
+            
+            # Get device list
+            result = subprocess.run(['adb', 'devices'], capture_output=True, text=True, timeout=15)
             if result.returncode != 0:
+                print(f"ADB devices command failed: {result.stderr}")
                 return []
             
             lines = result.stdout.strip().split('\n')[1:]  # Skip header
-            devices = []
             
             for line in lines:
-                if line.strip() and 'device' in line:
+                if line.strip():
                     parts = line.split('\t')
                     if len(parts) >= 2:
                         device_id = parts[0].strip()
                         status = parts[1].strip()
                         
-                        # Detect OS type
-                        os_type = self.detect_os_type(device_id)
-                        devices.append(DeviceInfo(device_id, os_type, status))
+                        # Only process devices that are actually connected
+                        if status in ['device', 'recovery', 'sideload']:
+                            # Validate device connection with a quick test
+                            if self._validate_device_connection(device_id):
+                                os_type = self.detect_os_type(device_id)
+                                devices.append(DeviceInfo(device_id, os_type, status))
+                            else:
+                                # Device listed but not responsive
+                                devices.append(DeviceInfo(device_id, 'Unknown', 'unresponsive'))
             
+            # Update internal device list
+            old_device_count = len(self.devices)
             self.devices = devices
+            
+            # Log device changes
+            if len(devices) != old_device_count:
+                print(f"Device count changed: {old_device_count} -> {len(devices)}")
+                
             return devices
             
+        except subprocess.TimeoutExpired:
+            print("ADB device detection timed out")
+            return []
         except Exception as e:
             print(f"Error detecting devices: {e}")
             return []
+            
+    def _validate_device_connection(self, device_id: str) -> bool:
+        """Validate that device is actually responsive"""
+        try:
+            # Quick test to see if device responds
+            result = subprocess.run(
+                ['adb', '-s', device_id, 'shell', 'echo', 'test'],
+                capture_output=True, text=True, timeout=3
+            )
+            return result.returncode == 0 and 'test' in result.stdout
+        except:
+            return False
 
     def detect_os_type(self, device_id: str) -> str:
-        """Detect the OS type of a connected device"""
+        """Robust OS type detection with multiple fallback methods"""
+        detection_methods = [
+            # Method 1: Check product model
+            {
+                'name': 'product_model',
+                'cmd': ['adb', '-s', device_id, 'shell', 'getprop', 'ro.product.model'],
+                'timeout': 5
+            },
+            # Method 2: Check build fingerprint
+            {
+                'name': 'build_fingerprint', 
+                'cmd': ['adb', '-s', device_id, 'shell', 'getprop', 'ro.build.fingerprint'],
+                'timeout': 5
+            },
+            # Method 3: Check manufacturer
+            {
+                'name': 'manufacturer',
+                'cmd': ['adb', '-s', device_id, 'shell', 'getprop', 'ro.product.manufacturer'],
+                'timeout': 5
+            }
+        ]
+        
+        # Try property-based detection first
+        for method in detection_methods:
+            try:
+                result = subprocess.run(
+                    method['cmd'], capture_output=True, text=True, 
+                    timeout=method['timeout']
+                )
+                
+                if result.returncode == 0:
+                    output = result.stdout.strip().lower()
+                    
+                    # Check for OS indicators
+                    if any(indicator in output for indicator in ['vega', 'echo', 'alexa']):
+                        return 'VEGA'
+                    elif any(indicator in output for indicator in ['fire', 'kindle', 'amazon']):
+                        return 'FOS' 
+                    elif 'puffin' in output:
+                        return 'Puffin'
+                        
+            except Exception as e:
+                print(f"OS detection method {method['name']} failed: {e}")
+                continue
+        
+        # Fallback: Directory-based detection
+        directory_checks = [
+            ('/var/lib/data', 'VEGA'),
+            ('/system/priv-app', 'FOS'),
+            ('/data/alexahybrid', 'Puffin')
+        ]
+        
+        for directory, os_type in directory_checks:
+            try:
+                result = subprocess.run(
+                    ['adb', '-s', device_id, 'shell', 'test', '-d', directory],
+                    capture_output=True, timeout=2
+                )
+                if result.returncode == 0:
+                    return os_type
+            except Exception:
+                continue
+                
+        # Final fallback: Try to determine by available commands
         try:
-            # Try to detect OS type by checking system properties
+            # Check if journalctl exists (VEGA)
             result = subprocess.run(
-                ['adb', '-s', device_id, 'shell', 'getprop', 'ro.product.model'],
-                capture_output=True, text=True, timeout=5
+                ['adb', '-s', device_id, 'shell', 'which', 'journalctl'],
+                capture_output=True, timeout=3
             )
-            
             if result.returncode == 0:
-                model = result.stdout.strip().lower()
-                
-                if 'vega' in model or 'echo' in model:
-                    return 'VEGA'
-                elif 'fire' in model or 'kindle' in model:
-                    return 'FOS'
-                elif 'puffin' in model:
-                    return 'Puffin'
-            
-            # Fallback: check for specific directories
-            vega_check = subprocess.run(
-                ['adb', '-s', device_id, 'shell', 'test', '-d', '/var/lib/data'],
-                capture_output=True, timeout=3
-            )
-            if vega_check.returncode == 0:
                 return 'VEGA'
-            
-            fos_check = subprocess.run(
-                ['adb', '-s', device_id, 'shell', 'test', '-d', '/system/priv-app'],
-                capture_output=True, timeout=3
-            )
-            if fos_check.returncode == 0:
-                return 'FOS'
-                
-            return 'Puffin'  # Default fallback
-            
         except Exception:
-            return 'Unknown'
+            pass
+            
+        # Default to FOS as it's most common
+        return 'FOS'
 
     def start_logging(self, device: dict, filename: Optional[str] = None, grep_patterns: Dict[int, str] = None):
         """Start ADB logging with trial-and-error approach"""
@@ -416,9 +492,30 @@ def handle_disconnect():
 
 @socketio.on('detect_devices')
 def handle_detect_devices():
-    """Handle device detection request"""
-    devices = adb_manager.detect_devices()
-    emit('devices', {'devices': [asdict(device) for device in devices]})
+    """Handle device detection request with enhanced error handling"""
+    try:
+        print("Starting device detection...")
+        devices = adb_manager.detect_devices()
+        device_data = [asdict(device) for device in devices]
+        print(f"Found {len(devices)} devices: {[d.device_id for d in devices]}")
+        emit('devices', {'devices': device_data})
+        
+        # Also emit connection status
+        if devices:
+            emit('connection_status', {
+                'status': 'connected',
+                'message': f'{len(devices)} device(s) connected'
+            })
+        else:
+            emit('connection_status', {
+                'status': 'disconnected', 
+                'message': 'No ADB devices found'
+            })
+            
+    except Exception as e:
+        print(f"Error in device detection: {e}")
+        emit('error', {'message': f'Device detection failed: {str(e)}'})
+        emit('devices', {'devices': []})
 
 @socketio.on('start_logging')
 def handle_start_logging(data):

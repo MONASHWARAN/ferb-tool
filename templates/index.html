@@ -622,6 +622,12 @@
             const deviceDropdownContainer = document.getElementById('deviceDropdownContainer');
             const deviceSelect = document.getElementById('deviceSelect');
             
+            // Check if elements exist
+            if (!deviceInfo || !deviceStatus || !deviceDropdownContainer || !deviceSelect) {
+                console.error('Required DOM elements not found');
+                return;
+            }
+            
             if (devices.length === 0) {
                 deviceInfo.innerHTML = '<div class="no-devices">No devices connected</div>';
                 deviceStatus.innerHTML = `
@@ -664,6 +670,12 @@
             const deviceSelect = document.getElementById('deviceSelect');
             const deviceInfo = document.getElementById('deviceInfo');
             const deviceStatus = document.getElementById('deviceStatus');
+            
+            // Check if elements exist
+            if (!deviceSelect || !deviceInfo || !deviceStatus) {
+                console.error('Required DOM elements not found');
+                return;
+            }
             
             if (deviceSelect.value) {
                 try {
@@ -911,9 +923,88 @@
             }, 5000);
         }
 
+        // Auto-refresh devices periodically
+        let deviceMonitorInterval;
+        
+        function startDeviceMonitoring() {
+            // Check for device changes every 10 seconds
+            deviceMonitorInterval = setInterval(() => {
+                if (socket && socket.connected) {
+                    socket.emit('detect_devices');
+                }
+            }, 10000);
+        }
+        
+        function stopDeviceMonitoring() {
+            if (deviceMonitorInterval) {
+                clearInterval(deviceMonitorInterval);
+                deviceMonitorInterval = null;
+            }
+        }
+        
+        // Enhanced socket initialization
+        function initSocket() {
+            socket = io();
+            
+            socket.on('connect', function() {
+                console.log('Connected to server');
+                refreshDevices();
+                startDeviceMonitoring();
+            });
+
+            socket.on('devices', function(data) {
+                updateDeviceList(data.devices);
+            });
+
+            socket.on('log_line', function(data) {
+                displayLogLine(data.line, data.timestamp);
+                checkGrepMatches(data.line, data.timestamp);
+            });
+
+            socket.on('grep_match', function(data) {
+                displayGrepMatch(data.pattern, data.line, data.timestamp);
+                updateGrepStatus(data.pattern_id, `Found match (${++grepCounts[data.pattern_id]} total)`);
+            });
+
+            socket.on('logging_status', function(data) {
+                updateLoggingStatus(data.status, data.message);
+            });
+
+            socket.on('chr_status', function(data) {
+                updateCHRStatus(data.status, data.message);
+            });
+
+            socket.on('error', function(data) {
+                console.error('Server error:', data.message);
+                showError(data.message);
+            });
+
+            socket.on('connect_error', function(error) {
+                console.error('Connection error:', error);
+                showError('Failed to connect to server. Please refresh the page.');
+                stopDeviceMonitoring();
+            });
+
+            socket.on('disconnect', function(reason) {
+                console.log('Disconnected:', reason);
+                stopDeviceMonitoring();
+                if (reason === 'io server disconnect') {
+                    showWarning('Connection lost. Attempting to reconnect...');
+                }
+            });
+        }
+        
         // Initialize when page loads
         window.onload = function() {
             initSocket();
+        };
+        
+        // Cleanup on page unload
+        window.onbeforeunload = function() {
+            stopDeviceMonitoring();
+            if (socket) {
+                socket.disconnect();
+            }
         };
     </script>
 </body>
