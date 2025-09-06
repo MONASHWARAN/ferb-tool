@@ -10,6 +10,7 @@ import subprocess
 import threading
 import time
 import re
+import socket
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, asdict
 from flask import Flask, render_template, jsonify
@@ -558,6 +559,17 @@ def handle_grep_match(data):
     pattern = data.get('pattern')
     print(f"Grep match found for pattern {pattern_id}: {pattern}")
 
+def find_available_port(start_port=5000, max_port=5100):
+    """Find an available port starting from start_port"""
+    for port in range(start_port, max_port):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind(('', port))
+                return port
+        except OSError:
+            continue
+    raise RuntimeError(f"No available ports found between {start_port} and {max_port}")
+
 def signal_handler(sig, frame):
     """Handle Ctrl+C gracefully"""
     print("\nShutting down ADB Log Tool...")
@@ -581,8 +593,26 @@ if __name__ == '__main__':
         print(f"❌ Error checking ADB: {e}")
         sys.exit(1)
     
+    # Try port 5000 first, then find alternative
     print("🚀 Starting FERB - the adb interaction tool Web Interface...")
-    print("🌐 Access the tool at: http://localhost:5000")
     
-    # Run the Flask-SocketIO app
-    socketio.run(app, host='0.0.0.0', port=5000, debug=False, use_reloader=False)
+    try:
+        # Try port 5000 first for webview compatibility
+        print("🌐 Access the tool at: http://localhost:5000")
+        socketio.run(app, host='0.0.0.0', port=5000, debug=False, use_reloader=False)
+        
+    except OSError as e:
+        if "Address already in use" in str(e):
+            # If port 5000 is busy, find an alternative
+            try:
+                port = find_available_port(5001)
+                print(f"⚠️  Port 5000 is busy, using alternative port: {port}")
+                print(f"🌐 Access the tool at: http://localhost:{port}")
+                socketio.run(app, host='0.0.0.0', port=port, debug=False, use_reloader=False)
+            except RuntimeError as port_error:
+                print(f"❌ Error finding available port: {port_error}")
+                print("Please check if other applications are using ports 5000-5100")
+                sys.exit(1)
+        else:
+            print(f"❌ Error starting server: {e}")
+            sys.exit(1)
