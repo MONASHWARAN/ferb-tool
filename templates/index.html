@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ADB Log Interaction Tool</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1e1e1e;
+            color: #ffffff;
+            line-height: 1.6;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px 0;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .section {
+            background-color: #2d2d2d;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid #404040;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .section-title {
+            font-size: 1.4em;
+            margin-bottom: 15px;
+            color: #64b5f6;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .device-section {
+            display: grid;
+            grid-template-columns: 1fr auto auto;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .device-info {
+            background-color: #383838;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #4caf50;
+        }
+
+        .device-status {
+            font-size: 0.9em;
+            color: #888;
+            margin-top: 5px;
+        }
+
+        .log-controls {
+            display: grid;
+            grid-template-columns: 1fr auto auto auto;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .input-field {
+            background-color: #383838;
+            border: 2px solid #555;
+            border-radius: 6px;
+            padding: 12px;
+            color: #ffffff;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .input-field:focus {
+            outline: none;
+            border-color: #64b5f6;
+        }
+
+        .btn {
+            background-color: #555;
+            border: none;
+            border-radius: 6px;
+            padding: 12px 20px;
+            color: #ffffff;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn:hover {
+            background-color: #666;
+            transform: translateY(-2px);
+        }
+
+        .btn-start {
+            background-color: #4caf50;
+        }
+
+        .btn-start:hover {
+            background-color: #45a049;
+        }
+
+        .btn-stop {
+            background-color: #f44336;
+        }
+
+        .btn-stop:hover {
+            background-color: #da190b;
+        }
+
+        .btn-primary {
+            background-color: #2196f3;
+        }
+
+        .btn-primary:hover {
+            background-color: #1976d2;
+        }
+
+        .btn:disabled {
+            background-color: #333;
+            color: #666;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .grep-section {
+            display: grid;
+            gap: 15px;
+        }
+
+        .grep-row {
+            display: grid;
+            grid-template-columns: 100px 1fr 150px;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .grep-label {
+            font-weight: 600;
+            color: #64b5f6;
+        }
+
+        .grep-status {
+            font-size: 0.9em;
+            color: #888;
+            font-style: italic;
+        }
+
+        .tabs {
+            display: flex;
+            background-color: #383838;
+            border-radius: 8px 8px 0 0;
+            overflow: hidden;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 15px;
+            text-align: center;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            border-right: 1px solid #555;
+        }
+
+        .tab:last-child {
+            border-right: none;
+        }
+
+        .tab.active {
+            background-color: #64b5f6;
+            color: #1e1e1e;
+        }
+
+        .tab:hover:not(.active) {
+            background-color: #444;
+        }
+
+        .tab-content {
+            background-color: #1a1a1a;
+            border-radius: 0 0 8px 8px;
+            height: 400px;
+            overflow-y: auto;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.4;
+            border: 1px solid #555;
+        }
+
+        .log-line {
+            margin-bottom: 3px;
+            word-wrap: break-word;
+        }
+
+        .log-timestamp {
+            color: #64b5f6;
+            margin-right: 10px;
+        }
+
+        .grep-match {
+            background-color: rgba(255, 193, 7, 0.2);
+            border-left: 3px solid #ffc107;
+            padding-left: 10px;
+            margin: 5px 0;
+        }
+
+        .chr-section {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr) auto;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .btn-fos {
+            background-color: #2196f3;
+        }
+
+        .btn-fos:hover {
+            background-color: #1976d2;
+        }
+
+        .btn-vega {
+            background-color: #ff9800;
+        }
+
+        .btn-vega:hover {
+            background-color: #f57c00;
+        }
+
+        .btn-puffin {
+            background-color: #9c27b0;
+        }
+
+        .btn-puffin:hover {
+            background-color: #7b1fa2;
+        }
+
+        .status-display {
+            background-color: #383838;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #64b5f6;
+            font-size: 0.9em;
+        }
+
+        .refresh-btn {
+            background-color: #4caf50;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .no-devices {
+            text-align: center;
+            color: #888;
+            font-style: italic;
+            padding: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .device-section {
+                grid-template-columns: 1fr;
+            }
+            
+            .log-controls {
+                grid-template-columns: 1fr;
+            }
+            
+            .chr-section {
+                grid-template-columns: 1fr;
+            }
+            
+            .grep-row {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔧 ADB Log Interaction Tool</h1>
+        <p>FOS, VEGA & Puffin Support</p>
+    </div>
+
+    <div class="container">
+        <!-- Device Section -->
+        <div class="section">
+            <div class="section-title">
+                📱 Connected Devices
+            </div>
+            <div class="device-section">
+                <div id="deviceInfo" class="device-info">
+                    <div id="deviceName">No devices connected</div>
+                    <div id="deviceStatus" class="device-status">Click refresh to detect devices</div>
+                </div>
+                <button id="refreshBtn" class="btn refresh-btn" onclick="refreshDevices()">
+                    🔄 Refresh
+                </button>
+                <select id="deviceSelect" class="input-field" onchange="selectDevice()" style="display: none;">
+                    <option value="">Select Device</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Log Control Section -->
+        <div class="section">
+            <div class="section-title">
+                📊 Log Control
+            </div>
+            <div class="log-controls">
+                <input type="text" id="logFilename" class="input-field" placeholder="Enter log filename (optional)">
+                <button id="startBtn" class="btn btn-start" onclick="startLogging()" disabled>
+                    🚀 Start Logs
+                </button>
+                <button id="stopBtn" class="btn btn-stop" onclick="stopLogging()" disabled>
+                    🛑 Stop Logs
+                </button>
+                <button id="clearBtn" class="btn" onclick="clearLogs()">
+                    🗑️ Clear Logs
+                </button>
+            </div>
+        </div>
+
+        <!-- Grep Section -->
+        <div class="section">
+            <div class="section-title">
+                🔍 Log Search (Grep)
+            </div>
+            <div class="grep-section">
+                <div class="grep-row">
+                    <div class="grep-label">Pattern 1:</div>
+                    <input type="text" id="grep1" class="input-field" placeholder="Enter search pattern 1" oninput="updateGrepPattern(1, this.value)">
+                    <div id="grepStatus1" class="grep-status">Ready</div>
+                </div>
+                <div class="grep-row">
+                    <div class="grep-label">Pattern 2:</div>
+                    <input type="text" id="grep2" class="input-field" placeholder="Enter search pattern 2" oninput="updateGrepPattern(2, this.value)">
+                    <div id="grepStatus2" class="grep-status">Ready</div>
+                </div>
+                <div class="grep-row">
+                    <div class="grep-label">Pattern 3:</div>
+                    <input type="text" id="grep3" class="input-field" placeholder="Enter search pattern 3" oninput="updateGrepPattern(3, this.value)">
+                    <div id="grepStatus3" class="grep-status">Ready</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Output Tabs -->
+        <div class="section">
+            <div class="section-title">
+                📄 Log Output
+            </div>
+            <div class="tabs">
+                <div class="tab active" onclick="switchTab('live')">📊 Live Logs</div>
+                <div class="tab" onclick="switchTab('grep')">🎯 Grep Results</div>
+            </div>
+            <div id="liveTab" class="tab-content">
+                <div id="liveLogs">Waiting for logs...</div>
+            </div>
+            <div id="grepTab" class="tab-content" style="display: none;">
+                <div id="grepResults">No grep matches yet...</div>
+            </div>
+        </div>
+
+        <!-- CHR Database Extraction -->
+        <div class="section">
+            <div class="section-title">
+                💾 CHR Database Extraction
+            </div>
+            <div class="chr-section">
+                <button class="btn btn-fos" onclick="extractCHR('FOS')" id="fosBtn" disabled>
+                    📥 Extract FOS CHR
+                </button>
+                <button class="btn btn-vega" onclick="extractCHR('VEGA')" id="vegaBtn" disabled>
+                    📥 Extract VEGA CHR
+                </button>
+                <button class="btn btn-puffin" onclick="extractCHR('Puffin')" id="puffinBtn" disabled>
+                    📥 Extract Puffin CHR
+                </button>
+                <div id="chrStatus" class="status-display">
+                    Ready to extract CHR database
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        let socket;
+        let currentDevice = null;
+        let isLogging = false;
+        let grepPatterns = {};
+        let grepCounts = {1: 0, 2: 0, 3: 0};
+
+        // Initialize socket connection
+        function initSocket() {
+            socket = io();
+            
+            socket.on('connect', function() {
+                console.log('Connected to server');
+                refreshDevices();
+            });
+
+            socket.on('devices', function(data) {
+                updateDeviceList(data.devices);
+            });
+
+            socket.on('log_line', function(data) {
+                displayLogLine(data.line, data.timestamp);
+                checkGrepMatches(data.line, data.timestamp);
+            });
+
+            socket.on('grep_match', function(data) {
+                displayGrepMatch(data.pattern, data.line, data.timestamp);
+                updateGrepStatus(data.pattern_id, `Found match (${++grepCounts[data.pattern_id]} total)`);
+            });
+
+            socket.on('logging_status', function(data) {
+                updateLoggingStatus(data.status, data.message);
+            });
+
+            socket.on('chr_status', function(data) {
+                updateCHRStatus(data.status, data.message);
+            });
+
+            socket.on('error', function(data) {
+                console.error('Server error:', data.message);
+                alert('Error: ' + data.message);
+            });
+        }
+
+        function refreshDevices() {
+            const btn = document.getElementById('refreshBtn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<div class="loading"></div> Detecting...';
+            btn.disabled = true;
+
+            socket.emit('detect_devices');
+            
+            setTimeout(() => {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }, 2000);
+        }
+
+        function updateDeviceList(devices) {
+            const deviceInfo = document.getElementById('deviceInfo');
+            const deviceStatus = document.getElementById('deviceStatus');
+            const deviceSelect = document.getElementById('deviceSelect');
+            
+            if (devices.length === 0) {
+                deviceInfo.innerHTML = '<div class="no-devices">No devices connected</div>';
+                deviceStatus.textContent = 'Connect an ADB device and click refresh';
+                deviceSelect.style.display = 'none';
+                disableDeviceActions();
+                return;
+            }
+
+            if (devices.length === 1) {
+                // Auto-select single device
+                currentDevice = devices[0];
+                deviceInfo.innerHTML = `
+                    <div><strong>${devices[0].device_id}</strong></div>
+                    <div>OS Type: <span style="color: #64b5f6">${devices[0].os_type}</span></div>
+                `;
+                deviceStatus.textContent = `Status: ${devices[0].status}`;
+                deviceSelect.style.display = 'none';
+                enableDeviceActions();
+            } else {
+                // Show device selector
+                deviceSelect.innerHTML = '<option value="">Select Device</option>';
+                devices.forEach(device => {
+                    const option = document.createElement('option');
+                    option.value = JSON.stringify(device);
+                    option.textContent = `${device.device_id} (${device.os_type}) - ${device.status}`;
+                    deviceSelect.appendChild(option);
+                });
+                deviceSelect.style.display = 'block';
+                deviceInfo.innerHTML = `<div>${devices.length} devices found - please select one</div>`;
+                deviceStatus.textContent = 'Multiple devices available';
+                disableDeviceActions();
+            }
+        }
+
+        function selectDevice() {
+            const deviceSelect = document.getElementById('deviceSelect');
+            const deviceInfo = document.getElementById('deviceInfo');
+            const deviceStatus = document.getElementById('deviceStatus');
+            
+            if (deviceSelect.value) {
+                currentDevice = JSON.parse(deviceSelect.value);
+                deviceInfo.innerHTML = `
+                    <div><strong>${currentDevice.device_id}</strong></div>
+                    <div>OS Type: <span style="color: #64b5f6">${currentDevice.os_type}</span></div>
+                `;
+                deviceStatus.textContent = `Status: ${currentDevice.status}`;
+                enableDeviceActions();
+            } else {
+                currentDevice = null;
+                disableDeviceActions();
+            }
+        }
+
+        function enableDeviceActions() {
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('fosBtn').disabled = false;
+            document.getElementById('vegaBtn').disabled = false;
+            document.getElementById('puffinBtn').disabled = false;
+        }
+
+        function disableDeviceActions() {
+            document.getElementById('startBtn').disabled = true;
+            document.getElementById('stopBtn').disabled = true;
+            document.getElementById('fosBtn').disabled = true;
+            document.getElementById('vegaBtn').disabled = true;
+            document.getElementById('puffinBtn').disabled = true;
+        }
+
+        function startLogging() {
+            if (!currentDevice) {
+                alert('Please select a device first');
+                return;
+            }
+
+            const filename = document.getElementById('logFilename').value.trim() || null;
+            
+            socket.emit('start_logging', {
+                device: currentDevice,
+                filename: filename,
+                grep_patterns: grepPatterns
+            });
+
+            isLogging = true;
+            document.getElementById('startBtn').disabled = true;
+            document.getElementById('stopBtn').disabled = false;
+            
+            // Clear previous logs
+            clearLogs();
+        }
+
+        function stopLogging() {
+            socket.emit('stop_logging');
+            isLogging = false;
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+        }
+
+        function clearLogs() {
+            document.getElementById('liveLogs').innerHTML = 'Waiting for logs...';
+            document.getElementById('grepResults').innerHTML = 'No grep matches yet...';
+            
+            // Reset grep counters
+            grepCounts = {1: 0, 2: 0, 3: 0};
+            Object.keys(grepPatterns).forEach(id => {
+                document.getElementById(`grepStatus${id}`).textContent = grepPatterns[id] ? 'Searching...' : 'Ready';
+            });
+        }
+
+        function updateGrepPattern(id, pattern) {
+            if (pattern.trim()) {
+                grepPatterns[id] = pattern;
+                document.getElementById(`grepStatus${id}`).textContent = 'Pattern set';
+            } else {
+                delete grepPatterns[id];
+                document.getElementById(`grepStatus${id}`).textContent = 'Ready';
+            }
+            grepCounts[id] = 0;
+        }
+
+        function displayLogLine(line, timestamp) {
+            const liveLogs = document.getElementById('liveLogs');
+            if (liveLogs.textContent === 'Waiting for logs...') {
+                liveLogs.innerHTML = '';
+            }
+            
+            const logElement = document.createElement('div');
+            logElement.className = 'log-line';
+            logElement.innerHTML = `<span class="log-timestamp">[${timestamp}]</span>${escapeHtml(line)}`;
+            liveLogs.appendChild(logElement);
+            liveLogs.scrollTop = liveLogs.scrollHeight;
+        }
+
+        function checkGrepMatches(line, timestamp) {
+            Object.keys(grepPatterns).forEach(id => {
+                const pattern = grepPatterns[id];
+                if (pattern && line.toLowerCase().includes(pattern.toLowerCase())) {
+                    socket.emit('grep_match_found', {
+                        pattern_id: parseInt(id),
+                        pattern: pattern,
+                        line: line,
+                        timestamp: timestamp
+                    });
+                }
+            });
+        }
+
+        function displayGrepMatch(pattern, line, timestamp) {
+            const grepResults = document.getElementById('grepResults');
+            if (grepResults.textContent === 'No grep matches yet...') {
+                grepResults.innerHTML = '';
+            }
+            
+            const matchElement = document.createElement('div');
+            matchElement.className = 'grep-match';
+            matchElement.innerHTML = `
+                <div><strong>Pattern:</strong> "${pattern}"</div>
+                <div><span class="log-timestamp">[${timestamp}]</span>${escapeHtml(line)}</div>
+            `;
+            grepResults.appendChild(matchElement);
+            grepResults.scrollTop = grepResults.scrollHeight;
+        }
+
+        function updateGrepStatus(patternId, status) {
+            document.getElementById(`grepStatus${patternId}`).textContent = status;
+        }
+
+        function updateLoggingStatus(status, message) {
+            console.log(`Logging ${status}: ${message}`);
+        }
+
+        function updateCHRStatus(status, message) {
+            document.getElementById('chrStatus').textContent = message;
+            
+            if (status === 'success') {
+                document.getElementById('chrStatus').style.borderLeftColor = '#4caf50';
+            } else if (status === 'error') {
+                document.getElementById('chrStatus').style.borderLeftColor = '#f44336';
+            } else {
+                document.getElementById('chrStatus').style.borderLeftColor = '#64b5f6';
+            }
+        }
+
+        function extractCHR(osType) {
+            if (!currentDevice) {
+                alert('Please select a device first');
+                return;
+            }
+
+            socket.emit('extract_chr', {
+                device: currentDevice,
+                os_type: osType
+            });
+
+            document.getElementById('chrStatus').textContent = `Extracting CHR database for ${osType}...`;
+            document.getElementById('chrStatus').style.borderLeftColor = '#ff9800';
+        }
+
+        function switchTab(tab) {
+            // Update tab buttons
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            // Show/hide tab content
+            document.getElementById('liveTab').style.display = tab === 'live' ? 'block' : 'none';
+            document.getElementById('grepTab').style.display = tab === 'grep' ? 'block' : 'none';
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Initialize when page loads
+        window.onload = function() {
+            initSocket();
+        };
+    </script>
+</body>
+</html>
