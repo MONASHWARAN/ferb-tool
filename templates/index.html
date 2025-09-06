@@ -625,16 +625,41 @@
         }
 
         function updateDeviceList(devices) {
-            const deviceInfo = document.getElementById('deviceInfo');
-            const deviceStatus = document.getElementById('deviceStatus');
-            const deviceDropdownContainer = document.getElementById('deviceDropdownContainer');
-            const deviceSelect = document.getElementById('deviceSelect');
+            // Ensure DOM elements exist before proceeding - with retry mechanism
+            function getDOMElements() {
+                return {
+                    deviceInfo: document.getElementById('deviceInfo'),
+                    deviceStatus: document.getElementById('deviceStatus'),
+                    deviceDropdownContainer: document.getElementById('deviceDropdownContainer'),
+                    deviceSelect: document.getElementById('deviceSelect')
+                };
+            }
             
-            // Check if elements exist
-            if (!deviceInfo || !deviceStatus || !deviceDropdownContainer || !deviceSelect) {
-                console.error('Required DOM elements not found');
+            let elements = getDOMElements();
+            
+            // If elements don't exist, retry up to 5 times with delays
+            if (!elements.deviceInfo || !elements.deviceStatus || !elements.deviceDropdownContainer || !elements.deviceSelect) {
+                let retryCount = 0;
+                const retryInterval = setInterval(() => {
+                    elements = getDOMElements();
+                    retryCount++;
+                    
+                    if (elements.deviceInfo && elements.deviceStatus && elements.deviceDropdownContainer && elements.deviceSelect) {
+                        clearInterval(retryInterval);
+                        processDeviceList(devices, elements);
+                    } else if (retryCount >= 5) {
+                        clearInterval(retryInterval);
+                        console.error('Failed to find required DOM elements after retries');
+                    }
+                }, 200);
                 return;
             }
+            
+            processDeviceList(devices, elements);
+        }
+        
+        function processDeviceList(devices, elements) {
+            const { deviceInfo, deviceStatus, deviceDropdownContainer, deviceSelect } = elements;
             
             if (devices.length === 0) {
                 deviceInfo.innerHTML = '<div class="no-devices">No devices connected</div>';
@@ -717,10 +742,32 @@
         }
 
         function enableDeviceActions() {
-            document.getElementById('startBtn').disabled = false;
-            document.getElementById('fosBtn').disabled = false;
-            document.getElementById('vegaBtn').disabled = false;
-            document.getElementById('puffinBtn').disabled = false;
+            // Ensure all buttons are enabled with retry mechanism
+            function enableButtons() {
+                const buttons = ['startBtn', 'fosBtn', 'vegaBtn', 'puffinBtn'];
+                let allEnabled = true;
+                
+                buttons.forEach(btnId => {
+                    const btn = document.getElementById(btnId);
+                    if (btn) {
+                        btn.disabled = false;
+                        console.log(`✅ Enabled button: ${btnId}`);
+                    } else {
+                        console.warn(`❌ Button not found: ${btnId}`);
+                        allEnabled = false;
+                    }
+                });
+                
+                return allEnabled;
+            }
+            
+            // Try to enable immediately
+            if (!enableButtons()) {
+                // If some buttons weren't found, retry after a short delay
+                setTimeout(() => {
+                    enableButtons();
+                }, 100);
+            }
         }
 
         function disableDeviceActions() {
