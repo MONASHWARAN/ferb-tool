@@ -179,7 +179,7 @@ class ADBManager:
         # Default to FOS as it's most common
         return 'FOS'
 
-    def start_logging(self, device: dict, filename: Optional[str] = None, grep_patterns: Dict[int, str] = None):
+    def start_logging(self, device: dict, filename: Optional[str] = None, grep_patterns: Optional[Dict[int, str]] = None):
         """Start ADB logging with trial-and-error approach"""
         if self.logging_active:
             self.socketio.emit('error', {'message': 'Logging is already active'})
@@ -204,8 +204,9 @@ class ADBManager:
                 if self.log_file_handle:
                     self.log_file_handle.close()
                     self.log_file_handle = None
+                device_id = self.current_device.device_id if self.current_device else 'unknown'
                 self.socketio.emit('error', {
-                    'message': f'Failed to start logging for {self.current_device.device_id}. Device may not support standard logging commands or is disconnected.'
+                    'message': f'Failed to start logging for {device_id}. Device may not support standard logging commands or is disconnected.'
                 })
                 return False
             
@@ -232,13 +233,13 @@ class ADBManager:
         methods = [
             {
                 'name': 'FOS/Puffin logcat',
-                'cmd': ['adb', '-s', self.current_device.device_id, 'logcat'],
-                'test_cmd': ['adb', '-s', self.current_device.device_id, 'shell', 'logcat', '-d', '-t', '1']
+                'cmd': ['adb', '-s', self.current_device.device_id if self.current_device else '', 'logcat'],
+                'test_cmd': ['adb', '-s', self.current_device.device_id if self.current_device else '', 'shell', 'logcat', '-d', '-t', '1']
             },
             {
                 'name': 'VEGA journalctl',
-                'cmd': ['adb', '-s', self.current_device.device_id, 'shell', 'journalctl', '-f'],
-                'test_cmd': ['adb', '-s', self.current_device.device_id, 'shell', 'journalctl', '--version']
+                'cmd': ['adb', '-s', self.current_device.device_id if self.current_device else '', 'shell', 'journalctl', '-f'],
+                'test_cmd': ['adb', '-s', self.current_device.device_id if self.current_device else '', 'shell', 'journalctl', '--version']
             }
         ]
         
@@ -246,7 +247,7 @@ class ADBManager:
             try:
                 self.socketio.emit('logging_status', {
                     'status': 'trying',
-                    'message': f'Trying {method["name"]} for {self.current_device.device_id}...'
+                    'message': f'Trying {method["name"]} for {self.current_device.device_id if self.current_device else "unknown"}...'
                 })
                 
                 # Test if the command is available
@@ -273,7 +274,7 @@ class ADBManager:
                     if self.log_process.poll() is None:  # Process is still running
                         self.socketio.emit('logging_status', {
                             'status': 'started',
-                            'message': f'Logging started using {method["name"]} for {self.current_device.device_id}'
+                            'message': f'Logging started using {method["name"]} for {self.current_device.device_id if self.current_device else "unknown"}'
                         })
                         return True
                     else:
