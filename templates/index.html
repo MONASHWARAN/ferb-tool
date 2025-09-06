@@ -1005,8 +1005,8 @@
             });
         }
         
-        // Initialize when page loads - ensure DOM is fully loaded
-        function waitForDOM() {
+        // Initialize when page loads - more robust DOM waiting
+        function waitForDOM(retryCount = 0) {
             const requiredElements = [
                 'deviceInfo', 'deviceStatus', 'deviceDropdownContainer', 'deviceSelect'
             ];
@@ -1014,23 +1014,36 @@
             let allElementsExist = true;
             for (const elementId of requiredElements) {
                 if (!document.getElementById(elementId)) {
-                    console.error(`Required element missing: ${elementId}`);
+                    console.warn(`Required element missing: ${elementId} (attempt ${retryCount + 1})`);
                     allElementsExist = false;
                 }
             }
             
             if (allElementsExist) {
+                console.log('All DOM elements found, initializing socket...');
                 initSocket();
                 return;
             }
             
-            // Retry after a short delay if elements not found
-            setTimeout(waitForDOM, 100);
+            // Retry up to 50 times (5 seconds total)
+            if (retryCount < 50) {
+                setTimeout(() => waitForDOM(retryCount + 1), 100);
+            } else {
+                console.error('Failed to find required DOM elements after 50 attempts');
+                // Try to initialize anyway
+                initSocket();
+            }
         }
         
-        document.addEventListener('DOMContentLoaded', function() {
-            waitForDOM();
-        });
+        // Multiple initialization strategies
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() {
+                setTimeout(waitForDOM, 100);
+            });
+        } else {
+            // DOM already loaded
+            setTimeout(waitForDOM, 100);
+        }
         
         // Cleanup on page unload
         window.onbeforeunload = function() {
