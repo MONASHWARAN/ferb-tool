@@ -39,6 +39,19 @@ class ADBManager:
         
     def detect_devices(self) -> List[DeviceInfo]:
         """Robust ADB device detection with connection validation"""
+        import os
+        
+        # Mock test mode - activate with environment variable
+        if os.getenv('FERB_TEST_MODE') == 'true':
+            mock_devices = [
+                DeviceInfo("MOCK_FOS_DEVICE", "FOS", "device"),
+                DeviceInfo("MOCK_VEGA_DEVICE", "VEGA", "device"), 
+                DeviceInfo("MOCK_PUFFIN_DEVICE", "Puffin", "device")
+            ]
+            self.devices = mock_devices
+            print("🧪 TEST MODE: Using mock devices for comprehensive functionality test")
+            return mock_devices
+        
         devices = []
         try:
             # First, try to start ADB server if not running
@@ -597,7 +610,15 @@ if __name__ == '__main__':
     
     # Find an available port automatically to avoid conflicts
     try:
-        port = find_available_port()
+        # Check if we're in test mode - force port 5000
+        import os
+        if os.getenv('FERB_TEST_MODE') == 'true':
+            port = 5000
+            print("🧪 TEST MODE: Forcing port 5000 for webview compatibility")
+        else:
+            # Find an available port in normal mode
+            port = find_available_port()
+        
         print("🚀 Starting FERB - the adb interaction tool Web Interface...")
         print(f"🌐 Access the tool at: http://localhost:{port}")
         
