@@ -389,8 +389,8 @@ class ADBManager:
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'adb_log_tool_secret_key'
 
-# Initialize SocketIO
-socketio = SocketIO(app, cors_allowed_origins="*")
+# Initialize SocketIO with proper configuration
+socketio = SocketIO(app, cors_allowed_origins="*", logger=True, engineio_logger=True)
 
 # Initialize ADB Manager
 adb_manager = ADBManager(socketio)
