@@ -4,3 +4,27 @@ expertMode = true
 
 [nix]
 channel = "stable-25_05"
+packages = ["mesa", "libGL", "xorg.libX11", "xorg.libXext", "xorg.libXrender", "libxkbcommon", "fontconfig", "freetype", "dbus", "zstd", "xorg.libxcb", "xorg.xcbutilcursor", "android-tools"]
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "ADB Log Tool"
+
+[[workflows.workflow]]
+name = "ADB Log Tool"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python adb_log_tool.py"
+
+[workflows.workflow.metadata]
+outputType = "vnc"

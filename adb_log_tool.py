@@ -36,7 +36,7 @@ class LogThread(QThread):
     log_received = pyqtSignal(str)
     error_occurred = pyqtSignal(str)
     
-    def __init__(self, device_id: str, os_type: str, filename: str = None):
+    def __init__(self, device_id: str, os_type: str, filename: Optional[str] = None):
         super().__init__()
         self.device_id = device_id
         self.os_type = os_type
@@ -67,7 +67,8 @@ class LogThread(QThread):
             )
             
             while self.running and self.process.poll() is None:
-                line = self.process.stdout.readline()
+                if self.process.stdout:
+                    line = self.process.stdout.readline()
                 if line:
                     self.log_received.emit(line.strip())
                     
@@ -94,26 +95,35 @@ class GrepThread(QThread):
         
     def add_pattern(self, pattern: str):
         """Add a grep pattern to search for"""
-        with self.mutex:
+        self.mutex.lock()
+        try:
             if pattern and pattern not in self.patterns:
                 self.patterns.append(pattern)
+        finally:
+            self.mutex.unlock()
                 
     def remove_pattern(self, pattern: str):
         """Remove a grep pattern"""
-        with self.mutex:
+        self.mutex.lock()
+        try:
             if pattern in self.patterns:
                 self.patterns.remove(pattern)
+        finally:
+            self.mutex.unlock()
                 
     def process_log_line(self, line: str):
         """Process a log line against all patterns"""
         if not self.running:
             return
             
-        with self.mutex:
+        self.mutex.lock()
+        try:
             for pattern in self.patterns:
                 if pattern and re.search(pattern, line, re.IGNORECASE):
                     self.grep_match_found.emit(pattern, line)
                     self.grep_status_updated.emit(pattern, f"Found match: {len(line)} chars")
+        finally:
+            self.mutex.unlock()
                     
     def start_grep(self):
         """Start grep processing"""
@@ -649,6 +659,9 @@ class ADBLogTool(QMainWindow):
 
 def main():
     """Main application entry point"""
+    # Set Qt platform plugin to offscreen for headless operation
+    os.environ['QT_QPA_PLATFORM'] = 'offscreen'
+    
     app = QApplication(sys.argv)
     
     # Set application properties
