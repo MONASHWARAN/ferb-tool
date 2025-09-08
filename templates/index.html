@@ -562,7 +562,11 @@
             
             socket.on('connect', function() {
                 console.log('Connected to server');
-                refreshDevices();
+                // Add a small delay to ensure socket is fully ready
+                setTimeout(() => {
+                    console.log('📡 Requesting device detection...');
+                    refreshDevices();
+                }, 200);
             });
 
             socket.on('devices', function(data) {
