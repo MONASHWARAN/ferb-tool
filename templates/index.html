@@ -569,22 +569,33 @@
                 }, 200);
             });
 
+            // CRITICAL: Device detection handler - this MUST work
             socket.on('devices', function(data) {
-                console.log('📱 DEVICE EVENT RECEIVED:', data);
+                console.log('🚨 DEVICES EVENT RECEIVED - PROCESSING NOW:', JSON.stringify(data));
                 
-                // IMMEDIATE button enabling when ANY device is detected
-                if (data.devices && data.devices.length > 0) {
-                    console.log(`🎯 DETECTED ${data.devices.length} DEVICE(S) - AUTO-ENABLING ALL BUTTONS NOW!`);
+                if (data && data.devices && Array.isArray(data.devices) && data.devices.length > 0) {
+                    console.log(`🎯 SUCCESS: Found ${data.devices.length} device(s) - ENABLING ALL BUTTONS IMMEDIATELY!`);
                     
-                    // Update device list display first
+                    // Update device dropdown
                     updateDeviceList(data.devices);
                     
-                    // DIRECTLY enable all buttons immediately
-                    enableAllButtons();
+                    // FORCE enable all buttons
+                    const buttonIds = ['startBtn', 'stopBtn', 'fosBtn', 'vegaBtn', 'puffinBtn'];
+                    buttonIds.forEach(btnId => {
+                        const btn = document.getElementById(btnId);
+                        if (btn) {
+                            btn.disabled = false;
+                            btn.style.opacity = '1';
+                            btn.style.pointerEvents = 'auto';
+                            console.log(`✅ FORCE ENABLED: ${btnId}`);
+                        } else {
+                            console.error(`❌ BUTTON NOT FOUND: ${btnId}`);
+                        }
+                    });
                     
-                    console.log('✅ BUTTONS AUTO-ENABLED FOR DEVICE DETECTION!');
+                    console.log('🚀 ALL BUTTONS NOW ENABLED - DEVICE DETECTION SUCCESS!');
                 } else {
-                    console.log('❌ No devices found - disabling buttons');
+                    console.log('❌ Invalid or empty device data - disabling buttons');
                     updateDeviceList([]);
                     disableDeviceActions();
                 }
