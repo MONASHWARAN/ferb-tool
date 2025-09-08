@@ -13,7 +13,7 @@ import re
 import socket
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, asdict
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, make_response
 from flask_socketio import SocketIO, emit
 import signal
 
@@ -488,8 +488,13 @@ adb_manager = ADBManager(socketio)
 
 @app.route('/')
 def index():
-    """Serve the main page"""
-    return render_template('index.html')
+    """Serve the main page with cache-busting headers"""
+    response = make_response(render_template('index.html'))
+    # Force browser to refresh JavaScript/CSS - prevent caching issues
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache' 
+    response.headers['Expires'] = '0'
+    return response
 
 @socketio.on('connect')
 def handle_connect():
@@ -623,7 +628,7 @@ if __name__ == '__main__':
         print(f"🌐 Access the tool at: http://localhost:{port}")
         
         # Run the Flask-SocketIO app on the discovered port
-        socketio.run(app, host='0.0.0.0', port=port, debug=False, use_reloader=False, allow_unsafe_werkzeug=True)
+        socketio.run(app, host='0.0.0.0', port=port, debug=False, use_reloader=False, allow_unsafe_werkzeug=True, log_output=False)
         
     except RuntimeError as e:
         print(f"❌ Error finding available port: {e}")

@@ -566,7 +566,20 @@
             });
 
             socket.on('devices', function(data) {
+                console.log('📱 Received devices in main handler:', data.devices);
                 updateDeviceList(data.devices);
+                
+                // Ensure auto-selection happens for multiple devices
+                if (data.devices && data.devices.length > 0) {
+                    setTimeout(() => {
+                        const deviceSelect = document.getElementById('deviceSelect');
+                        if (deviceSelect && deviceSelect.value === "") {
+                            console.log('🔄 Force auto-selecting first device');
+                            deviceSelect.value = JSON.stringify(data.devices[0]);
+                            selectDevice();
+                        }
+                    }, 500);
+                }
             });
 
             socket.on('log_line', function(data) {
@@ -625,37 +638,22 @@
         }
 
         function updateDeviceList(devices) {
-            // Ensure DOM elements exist before proceeding - with retry mechanism
-            function getDOMElements() {
-                return {
-                    deviceInfo: document.getElementById('deviceInfo'),
-                    deviceStatus: document.getElementById('deviceStatus'),
-                    deviceDropdownContainer: document.getElementById('deviceDropdownContainer'),
-                    deviceSelect: document.getElementById('deviceSelect')
-                };
-            }
+            console.log('🔍 updateDeviceList called with devices:', devices);
             
-            let elements = getDOMElements();
+            // Get DOM elements directly - no complex retry mechanism
+            const deviceInfo = document.getElementById('deviceInfo');
+            const deviceStatus = document.getElementById('deviceStatus');
+            const deviceDropdownContainer = document.getElementById('deviceDropdownContainer');
+            const deviceSelect = document.getElementById('deviceSelect');
             
-            // If elements don't exist, retry up to 5 times with delays
-            if (!elements.deviceInfo || !elements.deviceStatus || !elements.deviceDropdownContainer || !elements.deviceSelect) {
-                let retryCount = 0;
-                const retryInterval = setInterval(() => {
-                    elements = getDOMElements();
-                    retryCount++;
-                    
-                    if (elements.deviceInfo && elements.deviceStatus && elements.deviceDropdownContainer && elements.deviceSelect) {
-                        clearInterval(retryInterval);
-                        processDeviceList(devices, elements);
-                    } else if (retryCount >= 5) {
-                        clearInterval(retryInterval);
-                        console.error('Failed to find required DOM elements after retries');
-                    }
-                }, 200);
+            // Basic validation
+            if (!deviceInfo || !deviceStatus || !deviceDropdownContainer || !deviceSelect) {
+                console.error('❌ Missing required DOM elements');
                 return;
             }
             
-            processDeviceList(devices, elements);
+            console.log('✅ All DOM elements found, processing devices...');
+            processDeviceList(devices, { deviceInfo, deviceStatus, deviceDropdownContainer, deviceSelect });
         }
         
         function processDeviceList(devices, elements) {
@@ -690,15 +688,26 @@
                     Please select a device from the dropdown
                 </div>`;
             
-            // Auto-select if only one device
-            if (devices.length === 1) {
+            // Auto-select first device regardless of count
+            if (devices.length >= 1) {
+                console.log(`🔄 Auto-selecting device: ${devices[0].device_id}`);
                 deviceSelect.value = JSON.stringify(devices[0]);
-                selectDevice();
-            } else if (devices.length > 1) {
-                // Multiple devices available - automatically select the first one
-                deviceSelect.value = JSON.stringify(devices[0]);
-                selectDevice();
-                console.log('🔄 Auto-selected first device from multiple options');
+                
+                // Immediately trigger device selection
+                currentDevice = devices[0];
+                deviceInfo.innerHTML = `
+                    <div><strong>${currentDevice.device_id}</strong></div>
+                    <div>OS Type: <span style="color: #64b5f6">${currentDevice.os_type}</span></div>
+                `;
+                deviceStatus.innerHTML = `
+                    <div class="connection-status">
+                        <span class="status-dot ${currentDevice.status === 'device' ? '' : 'warning'}"></span>
+                        Status: ${currentDevice.status}
+                    </div>`;
+                
+                // Force enable all buttons directly
+                enableDeviceActions();
+                console.log('✅ Device auto-selected and buttons enabled');
             } else {
                 disableDeviceActions();
             }
