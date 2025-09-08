@@ -570,30 +570,39 @@
             });
 
             socket.on('devices', function(data) {
-                console.log('📱 Received devices in main handler:', data.devices);
+                console.log('📱 DEVICE EVENT RECEIVED:', data);
                 
                 // IMMEDIATE button enabling when ANY device is detected
                 if (data.devices && data.devices.length > 0) {
-                    console.log(`🟢 Found ${data.devices.length} devices - ENABLING ALL BUTTONS IMMEDIATELY`);
+                    console.log(`🎯 DETECTED ${data.devices.length} DEVICE(S) - AUTO-ENABLING ALL BUTTONS NOW!`);
                     
-                    // Update device list display
+                    // Update device list display first
                     updateDeviceList(data.devices);
                     
-                    // Force enable ALL buttons right now
-                    ['startBtn', 'stopBtn', 'fosBtn', 'vegaBtn', 'puffinBtn'].forEach(btnId => {
-                        const btn = document.getElementById(btnId);
-                        if (btn) {
-                            btn.disabled = false;
-                            console.log(`✅ ENABLED: ${btnId}`);
-                        }
-                    });
+                    // DIRECTLY enable all buttons immediately
+                    enableAllButtons();
                     
-                    console.log('🎉 ALL BUTTONS ARE NOW ENABLED!');
+                    console.log('✅ BUTTONS AUTO-ENABLED FOR DEVICE DETECTION!');
                 } else {
-                    console.log('❌ No devices - keeping buttons disabled');
+                    console.log('❌ No devices found - disabling buttons');
                     updateDeviceList([]);
+                    disableDeviceActions();
                 }
             });
+            
+            // Helper function to enable all buttons
+            function enableAllButtons() {
+                const buttons = ['startBtn', 'stopBtn', 'fosBtn', 'vegaBtn', 'puffinBtn'];
+                buttons.forEach(btnId => {
+                    const btn = document.getElementById(btnId);
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.style.opacity = '1';
+                        console.log(`🟢 ENABLED: ${btnId}`);
+                    }
+                });
+                console.log('🚀 ALL BUTTONS NOW ENABLED AND READY!');
+            }
 
             socket.on('log_line', function(data) {
                 displayLogLine(data.line, data.timestamp);
