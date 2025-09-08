@@ -558,22 +558,17 @@
 
         // Initialize socket connection
         function initSocket() {
-            socket = io();
-            
-            socket.on('connect', function() {
-                console.log('🔗 SOCKET CONNECTED SUCCESSFULLY');
-                console.log('🔍 Socket ID:', socket.id);
-                console.log('🔍 Socket connected state:', socket.connected);
-                
-                // Single device detection on connect - no continuous monitoring
-                setTimeout(() => {
-                    console.log('📡 REQUESTING DEVICE DETECTION - SENDING detect_devices EVENT...');
-                    socket.emit('detect_devices');
-                    console.log('✅ detect_devices event sent to backend');
-                }, 200);
+            console.log('🔧 Creating new socket connection...');
+            socket = io({
+                transports: ['websocket', 'polling'],
+                upgrade: true,
+                rememberUpgrade: true
             });
-
-            // CRITICAL: Device detection handler - this MUST work
+            
+            // FIRST: Register ALL event handlers BEFORE connecting
+            console.log('📝 Registering socket event handlers...');
+            
+            // CRITICAL: Device detection handler - MUST be registered FIRST
             socket.on('devices', function(data) {
                 console.log('🚨 DEVICES EVENT RECEIVED - PROCESSING NOW:', JSON.stringify(data));
                 
@@ -603,6 +598,17 @@
                     updateDeviceList([]);
                     disableDeviceActions();
                 }
+            });
+            
+            socket.on('connect', function() {
+                console.log('🔗 SOCKET CONNECTED SUCCESSFULLY');
+                console.log('🔍 Socket ID:', socket.id);
+                console.log('🔍 Socket connected state:', socket.connected);
+                
+                // IMMEDIATE device detection request
+                console.log('📡 REQUESTING DEVICE DETECTION - SENDING detect_devices EVENT...');
+                socket.emit('detect_devices');
+                console.log('✅ detect_devices event sent to backend');
             });
             
             // Helper function to enable all buttons
