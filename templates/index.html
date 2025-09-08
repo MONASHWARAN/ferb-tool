@@ -562,10 +562,10 @@
             
             socket.on('connect', function() {
                 console.log('Connected to server');
-                // Add a small delay to ensure socket is fully ready
+                // Single device detection on connect - no continuous monitoring
                 setTimeout(() => {
-                    console.log('📡 Requesting device detection...');
-                    refreshDevices();
+                    console.log('📡 Requesting initial device detection...');
+                    socket.emit('detect_devices');
                 }, 200);
             });
 
@@ -1052,12 +1052,8 @@
         let deviceMonitorInterval;
         
         function startDeviceMonitoring() {
-            // Check for device changes every 10 seconds
-            deviceMonitorInterval = setInterval(() => {
-                if (socket && socket.connected) {
-                    socket.emit('detect_devices');
-                }
-            }, 10000);
+            // Device monitoring disabled to prevent infinite loops
+            console.log('📱 Device monitoring disabled - using manual refresh only');
         }
         
         function stopDeviceMonitoring() {
@@ -1073,11 +1069,11 @@
             
             socket.on('connect', function() {
                 console.log('Connected to server');
-                // Wait for DOM to be ready before starting monitoring
+                // Single device detection on connect - no continuous monitoring
                 setTimeout(() => {
-                    refreshDevices();
-                    startDeviceMonitoring();
-                }, 100);
+                    console.log('📡 Requesting initial device detection...');
+                    socket.emit('detect_devices');
+                }, 200);
             });
 
             socket.on('log_line', function(data) {
