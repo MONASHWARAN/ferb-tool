@@ -561,11 +561,15 @@
             socket = io();
             
             socket.on('connect', function() {
-                console.log('Connected to server');
+                console.log('🔗 SOCKET CONNECTED SUCCESSFULLY');
+                console.log('🔍 Socket ID:', socket.id);
+                console.log('🔍 Socket connected state:', socket.connected);
+                
                 // Single device detection on connect - no continuous monitoring
                 setTimeout(() => {
-                    console.log('📡 Requesting initial device detection...');
+                    console.log('📡 REQUESTING DEVICE DETECTION - SENDING detect_devices EVENT...');
                     socket.emit('detect_devices');
+                    console.log('✅ detect_devices event sent to backend');
                 }, 200);
             });
 
@@ -1079,11 +1083,15 @@
             socket = io();
             
             socket.on('connect', function() {
-                console.log('Connected to server');
+                console.log('🔗 SOCKET CONNECTED SUCCESSFULLY');
+                console.log('🔍 Socket ID:', socket.id);
+                console.log('🔍 Socket connected state:', socket.connected);
+                
                 // Single device detection on connect - no continuous monitoring
                 setTimeout(() => {
-                    console.log('📡 Requesting initial device detection...');
+                    console.log('📡 REQUESTING DEVICE DETECTION - SENDING detect_devices EVENT...');
                     socket.emit('detect_devices');
+                    console.log('✅ detect_devices event sent to backend');
                 }, 200);
             });
 
