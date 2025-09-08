@@ -567,18 +567,27 @@
 
             socket.on('devices', function(data) {
                 console.log('📱 Received devices in main handler:', data.devices);
-                updateDeviceList(data.devices);
                 
-                // Ensure auto-selection happens for multiple devices
+                // IMMEDIATE button enabling when ANY device is detected
                 if (data.devices && data.devices.length > 0) {
-                    setTimeout(() => {
-                        const deviceSelect = document.getElementById('deviceSelect');
-                        if (deviceSelect && deviceSelect.value === "") {
-                            console.log('🔄 Force auto-selecting first device');
-                            deviceSelect.value = JSON.stringify(data.devices[0]);
-                            selectDevice();
+                    console.log(`🟢 Found ${data.devices.length} devices - ENABLING ALL BUTTONS IMMEDIATELY`);
+                    
+                    // Update device list display
+                    updateDeviceList(data.devices);
+                    
+                    // Force enable ALL buttons right now
+                    ['startBtn', 'stopBtn', 'fosBtn', 'vegaBtn', 'puffinBtn'].forEach(btnId => {
+                        const btn = document.getElementById(btnId);
+                        if (btn) {
+                            btn.disabled = false;
+                            console.log(`✅ ENABLED: ${btnId}`);
                         }
-                    }, 500);
+                    });
+                    
+                    console.log('🎉 ALL BUTTONS ARE NOW ENABLED!');
+                } else {
+                    console.log('❌ No devices - keeping buttons disabled');
+                    updateDeviceList([]);
                 }
             });
 
@@ -688,13 +697,15 @@
                     Please select a device from the dropdown
                 </div>`;
             
-            // Auto-select first device regardless of count
+            // Auto-enable buttons when ANY device is detected
             if (devices.length >= 1) {
-                console.log(`🔄 Auto-selecting device: ${devices[0].device_id}`);
-                deviceSelect.value = JSON.stringify(devices[0]);
+                console.log(`🔄 Found ${devices.length} device(s) - enabling all buttons`);
                 
-                // Immediately trigger device selection
+                // Auto-select first device
+                deviceSelect.value = JSON.stringify(devices[0]);
                 currentDevice = devices[0];
+                
+                // Update device info display
                 deviceInfo.innerHTML = `
                     <div><strong>${currentDevice.device_id}</strong></div>
                     <div>OS Type: <span style="color: #64b5f6">${currentDevice.os_type}</span></div>
@@ -705,10 +716,37 @@
                         Status: ${currentDevice.status}
                     </div>`;
                 
-                // Force enable all buttons directly
-                enableDeviceActions();
-                console.log('✅ Device auto-selected and buttons enabled');
+                // IMMEDIATELY enable all buttons when devices are detected
+                const startBtn = document.getElementById('startBtn');
+                const stopBtn = document.getElementById('stopBtn');
+                const fosBtn = document.getElementById('fosBtn');
+                const vegaBtn = document.getElementById('vegaBtn');
+                const puffinBtn = document.getElementById('puffinBtn');
+                
+                if (startBtn) {
+                    startBtn.disabled = false;
+                    console.log('🟢 Enabled button: startBtn');
+                }
+                if (stopBtn) {
+                    stopBtn.disabled = false;
+                    console.log('🟢 Enabled button: stopBtn');
+                }
+                if (fosBtn) {
+                    fosBtn.disabled = false;
+                    console.log('🟢 Enabled button: fosBtn');
+                }
+                if (vegaBtn) {
+                    vegaBtn.disabled = false;
+                    console.log('🟢 Enabled button: vegaBtn');
+                }
+                if (puffinBtn) {
+                    puffinBtn.disabled = false;
+                    console.log('🟢 Enabled button: puffinBtn');
+                }
+                
+                console.log('✅ ALL BUTTONS ENABLED - Device detection complete');
             } else {
+                console.log('❌ No devices found - disabling buttons');
                 disableDeviceActions();
             }
         }
