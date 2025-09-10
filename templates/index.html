@@ -564,6 +564,7 @@
             // CRITICAL: Device detection handler with FORCED enabling
             socket.on('devices', function(data) {
                 console.log('🚨 DEVICES EVENT RECEIVED - PROCESSING NOW:', JSON.stringify(data));
+                updateDeviceList(data.devices || []);
                 enableAllButtonsNow(data);
             });
             
@@ -576,6 +577,46 @@
                 }
             });
             
+            // UPDATE DEVICE LIST DISPLAY
+            function updateDeviceList(devices) {
+                console.log('📱 UPDATING DEVICE LIST:', devices);
+                const deviceSelect = document.getElementById('deviceSelect');
+                const deviceContainer = document.getElementById('deviceDropdownContainer');
+                const deviceInfo = document.getElementById('deviceInfo');
+                
+                if (!devices || devices.length === 0) {
+                    deviceContainer.style.display = 'none';
+                    if (deviceInfo) {
+                        deviceInfo.innerHTML = '<div class="no-devices">❌ No devices detected</div>';
+                    }
+                    return;
+                }
+                
+                // Clear existing options except the first
+                deviceSelect.innerHTML = '<option value="">Select Device</option>';
+                
+                // Add detected devices
+                devices.forEach(device => {
+                    const option = document.createElement('option');
+                    option.value = device.device_id;
+                    option.textContent = `${device.device_id} (${device.os_type})`;
+                    deviceSelect.appendChild(option);
+                });
+                
+                // Show device dropdown
+                deviceContainer.style.display = 'block';
+                
+                // Update device info display
+                if (deviceInfo) {
+                    deviceInfo.innerHTML = `
+                        <div><strong>✅ ${devices.length} device(s) detected</strong></div>
+                        <div class="device-status">Select a device from the dropdown to continue</div>
+                    `;
+                }
+                
+                console.log(`✅ DEVICE LIST UPDATED: ${devices.length} devices displayed`);
+            }
+
             // GUARANTEED button enabler function
             function enableAllButtonsNow(data = null) {
                 console.log('⚡ FORCE ENABLING ALL BUTTONS NOW!');
