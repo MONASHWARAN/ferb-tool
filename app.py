@@ -36,26 +36,76 @@ class ADBManager:
         self.log_buffer: List[str] = []
         self.log_file_handle = None
         self.grep_patterns: Dict[int, str] = {}
+        self.adb_path = self._find_adb_path()
+        self.os_type = os.name
         
+    def _find_adb_path(self):
+        """Find ADB in common locations based on OS"""
+        try:
+            if os.name == "nt":  # Windows
+                possible_paths = [
+                    os.path.join(os.environ.get("LOCALAPPDATA", ""), "Android", "Sdk", "platform-tools", "adb.exe"),
+                    os.path.join(os.environ.get("ProgramFiles", ""), "Android", "android-sdk", "platform-tools", "adb.exe"),
+                    os.path.join(os.environ.get("ProgramFiles(x86)", ""), "Android", "android-sdk", "platform-tools", "adb.exe"),
+                    "adb.exe"  # Try PATH
+                ]
+            else:  # macOS and Linux
+                possible_paths = [
+                    os.path.join(os.environ.get("HOME", ""), "Library", "Android", "sdk", "platform-tools", "adb"),
+                    os.path.join(os.environ.get("HOME", ""), "Android", "sdk", "platform-tools", "adb"),
+                    "/usr/local/bin/adb",
+                    "/usr/bin/adb",
+                    "adb"  # Try PATH
+                ]
+
+            for path in possible_paths:
+                if os.path.isfile(path):
+                    return path
+
+            # If not found in standard locations, try to execute adb from PATH
+            subprocess.run(["adb", "version"], capture_output=True, check=True, timeout=5)
+            return "adb"  # Found in PATH
+        except Exception:
+            return None
+
     def detect_devices(self) -> List[DeviceInfo]:
         """Robust ADB device detection with connection validation"""
-        import os
         
-        # FIRST: Always try to detect real devices
+        if not self.adb_path:
+            print("❌ ADB not found - cannot detect devices")
+            # FALLBACK: Use mock devices in test mode if ADB not available
+            if os.getenv('FERB_TEST_MODE') == 'true':
+                mock_devices = [
+                    DeviceInfo("MOCK_FOS_DEVICE", "FOS", "device"),
+                    DeviceInfo("MOCK_VEGA_DEVICE", "VEGA", "device"), 
+                    DeviceInfo("MOCK_PUFFIN_DEVICE", "Puffin", "device")
+                ]
+                self.devices = mock_devices
+                print("🧪 ADB not found - using mock devices for testing")
+                return mock_devices
+            return []
         
         devices = []
         try:
             # First, try to start ADB server if not running
             try:
-                subprocess.run(['adb', 'start-server'], capture_output=True, timeout=5)
+                if os.name == "nt":
+                    subprocess.run(f'{self.adb_path} start-server', shell=True, capture_output=True, timeout=5)
+                else:
+                    subprocess.run([self.adb_path, 'start-server'], capture_output=True, timeout=5)
             except:
                 pass  # Continue even if start-server fails
             
             # Get device list
-            result = subprocess.run(['adb', 'devices'], capture_output=True, text=True, timeout=15)
+            if os.name == "nt":
+                cmd = f'{self.adb_path} devices'
+                result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=15)
+            else:
+                result = subprocess.run([self.adb_path, 'devices'], capture_output=True, text=True, timeout=15)
+                
             if result.returncode != 0:
                 print(f"ADB devices command failed: {result.stderr}")
-                return []
+                return self._get_fallback_devices()
             
             lines = result.stdout.strip().split('\n')[1:]  # Skip header
             
@@ -70,14 +120,13 @@ class ADBManager:
                         if status in ['device', 'recovery', 'sideload']:
                             # Validate device connection with a quick test
                             if self._validate_device_connection(device_id):
-                                os_type = self.detect_os_type(device_id)
+                                os_type = self._detect_device_os_type(device_id)
                                 devices.append(DeviceInfo(device_id, os_type, status))
+                                print(f"✅ Detected device: {device_id} ({os_type})")
                             else:
                                 # Device listed but not responsive
                                 devices.append(DeviceInfo(device_id, 'Unknown', 'unresponsive'))
-            
-            # Update internal device list
-            old_device_count = len(self.devices)
+                                print(f"⚠️  Device unresponsive: {device_id}")
             
             # If real devices found, use them
             if devices:
@@ -85,119 +134,114 @@ class ADBManager:
                 print(f"✅ Found {len(devices)} real device(s): {[d.device_id for d in devices]}")
                 return devices
             
-            # FALLBACK: If no real devices found AND in test mode, use mock devices
-            if os.getenv('FERB_TEST_MODE') == 'true':
-                mock_devices = [
-                    DeviceInfo("MOCK_FOS_DEVICE", "FOS", "device"),
-                    DeviceInfo("MOCK_VEGA_DEVICE", "VEGA", "device"), 
-                    DeviceInfo("MOCK_PUFFIN_DEVICE", "Puffin", "device")
-                ]
-                self.devices = mock_devices
-                print("🧪 No real devices found - using mock devices for testing")
-                return mock_devices
-            
-            # No devices found at all
-            self.devices = []
-            print("❌ No ADB devices detected")
-            return []
+            return self._get_fallback_devices()
             
         except subprocess.TimeoutExpired:
-            print("ADB device detection timed out")
-            return []
+            print("⏱️  ADB device detection timed out")
+            return self._get_fallback_devices()
         except Exception as e:
-            print(f"Error detecting devices: {e}")
-            return []
+            print(f"❌ Error detecting devices: {e}")
+            return self._get_fallback_devices()
+    
+    def _get_fallback_devices(self):
+        """Get fallback devices when real detection fails"""
+        # FALLBACK: If no real devices found AND in test mode, use mock devices
+        if os.getenv('FERB_TEST_MODE') == 'true':
+            mock_devices = [
+                DeviceInfo("MOCK_FOS_DEVICE", "FOS", "device"),
+                DeviceInfo("MOCK_VEGA_DEVICE", "VEGA", "device"), 
+                DeviceInfo("MOCK_PUFFIN_DEVICE", "Puffin", "device")
+            ]
+            self.devices = mock_devices
+            print("🧪 No real devices found - using mock devices for testing")
+            return mock_devices
+        
+        # No devices found at all
+        self.devices = []
+        print("❌ No ADB devices detected")
+        return []
             
     def _validate_device_connection(self, device_id: str) -> bool:
         """Validate that device is actually responsive"""
+        if not self.adb_path:
+            return False
+            
         try:
             # Quick test to see if device responds
-            result = subprocess.run(
-                ['adb', '-s', device_id, 'shell', 'echo', 'test'],
-                capture_output=True, text=True, timeout=3
-            )
+            if os.name == "nt":
+                cmd = f'{self.adb_path} -s {device_id} shell echo test'
+                result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=5)
+            else:
+                result = subprocess.run(
+                    [self.adb_path, '-s', device_id, 'shell', 'echo', 'test'],
+                    capture_output=True, text=True, timeout=5
+                )
             return result.returncode == 0 and 'test' in result.stdout
         except:
             return False
 
-    def detect_os_type(self, device_id: str) -> str:
-        """Robust OS type detection with multiple fallback methods"""
-        detection_methods = [
-            # Method 1: Check product model
-            {
-                'name': 'product_model',
-                'cmd': ['adb', '-s', device_id, 'shell', 'getprop', 'ro.product.model'],
-                'timeout': 5
-            },
-            # Method 2: Check build fingerprint
-            {
-                'name': 'build_fingerprint', 
-                'cmd': ['adb', '-s', device_id, 'shell', 'getprop', 'ro.build.fingerprint'],
-                'timeout': 5
-            },
-            # Method 3: Check manufacturer
-            {
-                'name': 'manufacturer',
-                'cmd': ['adb', '-s', device_id, 'shell', 'getprop', 'ro.product.manufacturer'],
-                'timeout': 5
-            }
-        ]
-        
-        # Try property-based detection first
-        for method in detection_methods:
-            try:
-                result = subprocess.run(
-                    method['cmd'], capture_output=True, text=True, 
-                    timeout=method['timeout']
-                )
-                
-                if result.returncode == 0:
-                    output = result.stdout.strip().lower()
-                    
-                    # Check for OS indicators
-                    if any(indicator in output for indicator in ['vega', 'echo', 'alexa']):
-                        return 'VEGA'
-                    elif any(indicator in output for indicator in ['fire', 'kindle', 'amazon']):
-                        return 'FOS' 
-                    elif 'puffin' in output:
-                        return 'Puffin'
-                        
-            except Exception as e:
-                print(f"OS detection method {method['name']} failed: {e}")
-                continue
-        
-        # Fallback: Directory-based detection
-        directory_checks = [
-            ('/var/lib/data', 'VEGA'),
-            ('/system/priv-app', 'FOS'),
-            ('/data/alexahybrid', 'Puffin')
-        ]
-        
-        for directory, os_type in directory_checks:
-            try:
-                result = subprocess.run(
-                    ['adb', '-s', device_id, 'shell', 'test', '-d', directory],
-                    capture_output=True, timeout=2
-                )
-                if result.returncode == 0:
-                    return os_type
-            except Exception:
-                continue
-                
-        # Final fallback: Try to determine by available commands
+    def _detect_device_os_type(self, device_id: str) -> str:
+        """Detect OS type (FOS, VEGA, Puffin) using ADB commands"""
+        if not self.adb_path:
+            return "Unknown"
+            
         try:
-            # Check if journalctl exists (VEGA)
-            result = subprocess.run(
-                ['adb', '-s', device_id, 'shell', 'which', 'journalctl'],
-                capture_output=True, timeout=3
-            )
-            if result.returncode == 0:
-                return 'VEGA'
+            # Method 1: Try to detect FOS (Fuchsia OS)
+            if os.name == "nt":
+                cmd = f'{self.adb_path} -s {device_id} shell getprop ro.product.name'
+                result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=10)
+            else:
+                result = subprocess.run([self.adb_path, '-s', device_id, 'shell', 'getprop', 'ro.product.name'], 
+                                      capture_output=True, text=True, timeout=10)
+            if result.returncode == 0 and "fuchsia" in result.stdout.lower():
+                return "FOS"
         except Exception:
             pass
-            
-        # Default to FOS as it's most common
-        return 'FOS'
+
+        try:
+            # Method 2: Try to detect VEGA OS
+            if os.name == "nt":
+                cmd = f'{self.adb_path} -s {device_id} shell getprop ro.product.name'
+                result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=10)
+            else:
+                result = subprocess.run([self.adb_path, '-s', device_id, 'shell', 'getprop', 'ro.product.name'], 
+                                      capture_output=True, text=True, timeout=10)
+            if result.returncode == 0 and "vega" in result.stdout.lower():
+                return "VEGA"
+        except Exception:
+            pass
+
+        try:
+            # Method 3: Try to detect Puffin OS
+            if os.name == "nt":
+                cmd = f'{self.adb_path} -s {device_id} shell getprop ro.product.model'
+                result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=10)
+            else:
+                result = subprocess.run([self.adb_path, '-s', device_id, 'shell', 'getprop', 'ro.product.model'], 
+                                      capture_output=True, text=True, timeout=10)
+            if result.returncode == 0 and "puffin" in result.stdout.lower():
+                return "Puffin"
+        except Exception:
+            pass
+
+        try:
+            # Method 4: Check if any device is connected (fallback)
+            if os.name == "nt":
+                cmd = f'{self.adb_path} -s {device_id} shell echo connected'
+                result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=10)
+            else:
+                result = subprocess.run([self.adb_path, '-s', device_id, 'shell', 'echo', 'connected'], 
+                                      capture_output=True, text=True, timeout=10)
+            if result.returncode == 0 and "connected" in result.stdout:
+                return "Android"  # Generic Android device
+        except Exception:
+            pass
+
+        return "Unknown"
+
+    def detect_os_type(self, device_id: str) -> str:
+        """Legacy method for backward compatibility"""
+        return self._detect_device_os_type(device_id)
 
     def start_logging(self, device: dict, filename: Optional[str] = None, grep_patterns: Optional[Dict[int, str]] = None):
         """Start ADB logging with trial-and-error approach"""
