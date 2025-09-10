@@ -41,16 +41,7 @@ class ADBManager:
         """Robust ADB device detection with connection validation"""
         import os
         
-        # Mock test mode - activate with environment variable
-        if os.getenv('FERB_TEST_MODE') == 'true':
-            mock_devices = [
-                DeviceInfo("MOCK_FOS_DEVICE", "FOS", "device"),
-                DeviceInfo("MOCK_VEGA_DEVICE", "VEGA", "device"), 
-                DeviceInfo("MOCK_PUFFIN_DEVICE", "Puffin", "device")
-            ]
-            self.devices = mock_devices
-            print("🧪 TEST MODE: Using mock devices for comprehensive functionality test")
-            return mock_devices
+        # FIRST: Always try to detect real devices
         
         devices = []
         try:
@@ -87,13 +78,28 @@ class ADBManager:
             
             # Update internal device list
             old_device_count = len(self.devices)
-            self.devices = devices
             
-            # Log device changes
-            if len(devices) != old_device_count:
-                print(f"Device count changed: {old_device_count} -> {len(devices)}")
-                
-            return devices
+            # If real devices found, use them
+            if devices:
+                self.devices = devices
+                print(f"✅ Found {len(devices)} real device(s): {[d.device_id for d in devices]}")
+                return devices
+            
+            # FALLBACK: If no real devices found AND in test mode, use mock devices
+            if os.getenv('FERB_TEST_MODE') == 'true':
+                mock_devices = [
+                    DeviceInfo("MOCK_FOS_DEVICE", "FOS", "device"),
+                    DeviceInfo("MOCK_VEGA_DEVICE", "VEGA", "device"), 
+                    DeviceInfo("MOCK_PUFFIN_DEVICE", "Puffin", "device")
+                ]
+                self.devices = mock_devices
+                print("🧪 No real devices found - using mock devices for testing")
+                return mock_devices
+            
+            # No devices found at all
+            self.devices = []
+            print("❌ No ADB devices detected")
+            return []
             
         except subprocess.TimeoutExpired:
             print("ADB device detection timed out")
