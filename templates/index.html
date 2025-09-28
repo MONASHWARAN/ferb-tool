@@ -3,9 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FERB - the adb interaction tool</title>
-    <!-- Cache busting timestamp -->
-    <meta name="cache-buster" content="v20250928-171300">
+    <title>FERB - the adb interaction tool - v3-WORKING</title>
+    <!-- AGGRESSIVE CACHE BREAK -->
+    <meta name="cache-buster" content="v20250928-172015-SOCKET-FIXED">
+    <meta name="force-refresh" content="socket-fix-final">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <style>
         * {
             margin: 0;
@@ -558,12 +562,24 @@
         let grepPatterns = {};
         let grepCounts = {1: 0, 2: 0, 3: 0};
 
-        // Initialize socket connection
+        // Initialize socket connection with proper event listeners
         function initSocket() {
             console.log('🔧 Creating new socket connection...');
-            socket = io();
+            socket = io({ transports: ['websocket', 'polling'], path: '/socket.io' });
             
-            // CRITICAL: Device detection handler with FORCED enabling
+            // Register ALL event listeners IMMEDIATELY after socket creation
+            socket.on('connect', function() {
+                console.log('🔗 SOCKET CONNECTED SUCCESSFULLY');
+                console.log('🔍 Socket ID:', socket.id);
+                console.log('🔍 Socket connected state:', socket.connected);
+                
+                // Request device detection immediately on connect
+                console.log('📡 REQUESTING DEVICE DETECTION - SENDING detect_devices EVENT...');
+                socket.emit('detect_devices');
+                console.log('✅ detect_devices event sent to backend');
+            });
+            
+            // CRITICAL: Device detection handler
             socket.on('devices', function(data) {
                 console.log('🚨 DEVICES EVENT RECEIVED - PROCESSING NOW:', JSON.stringify(data));
                 console.log('🔍 Device data structure:', data);
@@ -572,31 +588,43 @@
                 enableAllButtonsNow(data);
             });
             
-            // BACKUP: Listen for any 'devices' event variations
-            socket.addEventListener('message', function(event) {
-                console.log('📨 RAW SOCKET MESSAGE:', event);
-                if (event.data && event.data.includes('devices')) {
-                    console.log('🎯 DETECTED DEVICES IN RAW MESSAGE - FORCE ENABLING BUTTONS!');
-                    enableAllButtonsNow();
-                }
+            // Connection status handler
+            socket.on('connection_status', function(status) {
+                console.log('📊 CONNECTION STATUS RECEIVED:', status);
             });
             
-            // UPDATE DEVICE LIST DISPLAY
-            function updateDeviceList(devices) {
-                console.log('📱 UPDATING DEVICE LIST:', devices);
-                const deviceSelect = document.getElementById('deviceSelect');
-                const deviceContainer = document.getElementById('deviceDropdownContainer');
-                const deviceInfo = document.getElementById('deviceInfo');
-                
-                if (!devices || devices.length === 0) {
-                    deviceContainer.style.display = 'none';
-                    if (deviceInfo) {
-                        deviceInfo.innerHTML = '<div class="no-devices">❌ No devices detected</div>';
-                    }
-                    return;
+            // Error handler
+            socket.on('error', function(error) {
+                console.error('🚨 SOCKET ERROR:', error);
+            });
+            
+            // Catch-all event handler for debugging
+            socket.onAny((eventName, ...args) => {
+                console.log('📨 SOCKET EVENT RECEIVED:', eventName, args);
+                if (eventName === 'devices') {
+                    console.log('🎯 DEVICES EVENT DETECTED IN onAny - PROCESSING');
+                    updateDeviceList(args[0]?.devices || []);
                 }
-                
-                // Clear existing options except the first
+            });
+        }
+
+        // UPDATE DEVICE LIST DISPLAY
+        function updateDeviceList(devices) {
+            console.log('📱 UPDATING DEVICE LIST:', devices);
+            const deviceSelect = document.getElementById('deviceSelect');
+            const deviceContainer = document.getElementById('deviceDropdownContainer');
+            const deviceInfo = document.getElementById('deviceInfo');
+            
+            if (!devices || devices.length === 0) {
+                if (deviceContainer) deviceContainer.style.display = 'none';
+                if (deviceInfo) {
+                    deviceInfo.innerHTML = '<div class="no-devices">❌ No devices detected</div>';
+                }
+                return;
+            }
+            
+            // Clear existing options except the first
+            if (deviceSelect) {
                 deviceSelect.innerHTML = '<option value="">Select Device</option>';
                 
                 // Add detected devices
@@ -606,88 +634,59 @@
                     option.textContent = `${device.device_id} (${device.os_type})`;
                     deviceSelect.appendChild(option);
                 });
-                
-                // Show device dropdown
-                deviceContainer.style.display = 'block';
-                
-                // Update device info display
-                if (deviceInfo) {
-                    deviceInfo.innerHTML = `
-                        <div><strong>✅ ${devices.length} device(s) detected</strong></div>
-                        <div class="device-status">Select a device from the dropdown to continue</div>
-                    `;
-                }
-                
-                console.log(`✅ DEVICE LIST UPDATED: ${devices.length} devices displayed`);
             }
+            
+            // Show device dropdown
+            if (deviceContainer) deviceContainer.style.display = 'block';
+            
+            // Update device info display
+            if (deviceInfo) {
+                deviceInfo.innerHTML = `
+                    <div><strong>✅ ${devices.length} device(s) detected</strong></div>
+                    <div class="device-status">Select a device from the dropdown to continue</div>
+                `;
+            }
+            
+            console.log(`✅ DEVICE LIST UPDATED: ${devices.length} devices displayed`);
+        }
 
-            // GUARANTEED button enabler function
-            function enableAllButtonsNow(data = null) {
-                console.log('⚡ FORCE ENABLING ALL BUTTONS NOW!');
-                
-                if (data && data.devices) {
-                    updateDeviceList(data.devices);
-                    console.log(`✅ Updated device list with ${data.devices.length} devices`);
-                }
-                
-                // FORCE enable ALL buttons regardless
-                ['startBtn', 'stopBtn', 'fosBtn', 'vegaBtn', 'puffinBtn'].forEach(btnId => {
-                    const btn = document.getElementById(btnId);
-                    if (btn) {
-                        btn.disabled = false;
-                        btn.style.opacity = '1';
-                        btn.style.pointerEvents = 'auto';
-                        btn.classList.remove('disabled');
-                        console.log(`✅ ENABLED: ${btnId}`);
-                    }
-                });
-                
-                console.log('🚀 ALL BUTTONS NOW ENABLED AND READY!');
+        // GUARANTEED button enabler function
+        function enableAllButtonsNow(data = null) {
+            console.log('⚡ FORCE ENABLING ALL BUTTONS NOW!');
+            
+            if (data && data.devices) {
+                updateDeviceList(data.devices);
+                console.log(`✅ Updated device list with ${data.devices.length} devices`);
             }
             
-            // Connection handler
-            socket.on('connect', function() {
-                console.log('🔗 SOCKET CONNECTED SUCCESSFULLY');
-                console.log('🔍 Socket ID:', socket.id);
-                console.log('🔍 Socket connected state:', socket.connected);
-                
-                // Wait for full connection establishment before device detection
-                setTimeout(() => {
-                    console.log('📡 REQUESTING DEVICE DETECTION - SENDING detect_devices EVENT...');
-                    socket.emit('detect_devices');
-                    console.log('✅ detect_devices event sent to backend');
-                    
-                    // FORCE enable buttons after 3 seconds if no response
-                    setTimeout(() => {
-                        console.log('⏰ TIMEOUT - No devices event received, enabling buttons by force');
-                        enableAllButtonsNow();
-                    }, 3000);
-                }, 500);
-            });
-            
-            // Add catch-all event listener for debugging
-            socket.onAny((eventName, ...args) => {
-                console.log('📨 SOCKET EVENT RECEIVED:', eventName, args);
-                if (eventName === 'devices') {
-                    console.log('🎯 DEVICES EVENT DETECTED IN onAny - PROCESSING');
-                    updateDeviceList(args[0]?.devices || []);
+            // FORCE enable ALL buttons regardless
+            ['startBtn', 'stopBtn', 'fosBtn', 'vegaBtn', 'puffinBtn'].forEach(btnId => {
+                const btn = document.getElementById(btnId);
+                if (btn) {
+                    btn.disabled = false;
+                    btn.style.opacity = '1';
+                    btn.style.pointerEvents = 'auto';
+                    btn.classList.remove('disabled');
+                    console.log(`✅ ENABLED: ${btnId}`);
                 }
             });
             
-            // Helper function to enable all buttons
-            function enableAllButtons() {
-                const buttons = ['startBtn', 'stopBtn', 'fosBtn', 'vegaBtn', 'puffinBtn'];
-                buttons.forEach(btnId => {
-                    const btn = document.getElementById(btnId);
-                    if (btn) {
-                        btn.disabled = false;
-                        btn.style.opacity = '1';
-                        console.log(`🟢 ENABLED: ${btnId}`);
-                    }
-                });
-                console.log('🚀 ALL BUTTONS NOW ENABLED AND READY!');
-            }
+            console.log('🚀 ALL BUTTONS NOW ENABLED AND READY!');
+        }
 
+        // Initialize socket when everything is ready
+        function startSocketConnection() {
+            if (socket) {
+                console.log('Socket already exists, skipping initialization');
+                return;
+            }
+            initSocket();
+        }
+
+        // Socket event handlers (extending the existing handlers)
+        function setupAdditionalSocketHandlers() {
+            if (!socket) return;
+            
             socket.on('log_line', function(data) {
                 displayLogLine(data.line, data.timestamp);
                 checkGrepMatches(data.line, data.timestamp);
@@ -1147,22 +1146,7 @@
             }
         }
         
-        // Enhanced socket initialization
-        function initSocket() {
-            socket = io();
-            
-            socket.on('connect', function() {
-                console.log('🔗 SOCKET CONNECTED SUCCESSFULLY');
-                console.log('🔍 Socket ID:', socket.id);
-                console.log('🔍 Socket connected state:', socket.connected);
-                
-                // Single device detection on connect - no continuous monitoring
-                setTimeout(() => {
-                    console.log('📡 REQUESTING DEVICE DETECTION - SENDING detect_devices EVENT...');
-                    socket.emit('detect_devices');
-                    console.log('✅ detect_devices event sent to backend');
-                }, 200);
-            });
+        // Remove duplicate socket initialization - handled above
 
             socket.on('log_line', function(data) {
                 displayLogLine(data.line, data.timestamp);
