@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FERB - the adb interaction tool</title>
+    <!-- Cache busting timestamp -->
+    <meta name="cache-buster" content="v20250928-171300">
     <style>
         * {
             margin: 0;
@@ -564,6 +566,8 @@
             // CRITICAL: Device detection handler with FORCED enabling
             socket.on('devices', function(data) {
                 console.log('🚨 DEVICES EVENT RECEIVED - PROCESSING NOW:', JSON.stringify(data));
+                console.log('🔍 Device data structure:', data);
+                console.log('🔍 Devices array:', data.devices);
                 updateDeviceList(data.devices || []);
                 enableAllButtonsNow(data);
             });
@@ -645,24 +649,29 @@
             socket.on('connect', function() {
                 console.log('🔗 SOCKET CONNECTED SUCCESSFULLY');
                 console.log('🔍 Socket ID:', socket.id);
+                console.log('🔍 Socket connected state:', socket.connected);
                 
-                // IMMEDIATE device detection request
+                // Wait for full connection establishment before device detection
                 setTimeout(() => {
-                    console.log('📡 REQUESTING DEVICE DETECTION...');
+                    console.log('📡 REQUESTING DEVICE DETECTION - SENDING detect_devices EVENT...');
                     socket.emit('detect_devices');
                     console.log('✅ detect_devices event sent to backend');
                     
-                    // FORCE enable buttons after 2 seconds if no response
+                    // FORCE enable buttons after 3 seconds if no response
                     setTimeout(() => {
-                        console.log('⏰ TIMEOUT - ENABLING BUTTONS BY FORCE (TEST MODE)');
+                        console.log('⏰ TIMEOUT - No devices event received, enabling buttons by force');
                         enableAllButtonsNow();
-                    }, 2000);
-                }, 100);
+                    }, 3000);
+                }, 500);
             });
             
             // Add catch-all event listener for debugging
             socket.onAny((eventName, ...args) => {
                 console.log('📨 SOCKET EVENT RECEIVED:', eventName, args);
+                if (eventName === 'devices') {
+                    console.log('🎯 DEVICES EVENT DETECTED IN onAny - PROCESSING');
+                    updateDeviceList(args[0]?.devices || []);
+                }
             });
             
             // Helper function to enable all buttons
